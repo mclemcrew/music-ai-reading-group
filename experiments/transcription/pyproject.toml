@@ -1,0 +1,12 @@
+[project]
+name = "nmp-from-scratch"
+version = "0.1.0"
+description = "NMP/Basic Pitch architecture from scratch in PyTorch (reading group demo)"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.6.0",
+    "librosa>=0.10.2",
+    "numpy>=2.2.0",
+    "matplotlib>=3.10.0",
+    "soundfile>=0.13.1",
+]

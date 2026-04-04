@@ -1,0 +1,115 @@
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	font-family: var(--font-body);
+	background: var(--bg);
+	color: var(--text);
+	line-height: 1.6;
+	overflow-x: hidden;
+}
+
+code,
+.mono {
+	font-family: var(--font-mono);
+}
+
+a {
+	color: var(--orange);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+p {
+	margin-bottom: 1rem;
+}
+
+p.muted,
+.muted {
+	color: var(--text-muted);
+	font-size: 0.9rem;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	font-family: var(--font-display);
+}
+
+/* Responsive typography */
+h1 {
+	font-size: clamp(1.8rem, 4vw, 2.8rem);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+h2 {
+	font-size: clamp(1.2rem, 3vw, 1.5rem);
+	font-weight: 600;
+	margin-bottom: 1.2rem;
+}
+
+h3 {
+	font-size: 1.1rem;
+	color: var(--teal);
+	margin: 1.5rem 0 0.75rem;
+	font-weight: 600;
+}
+
+/* Code blocks */
+pre {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	font-size: clamp(0.75rem, 2vw, 0.88rem);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 1rem 1.25rem;
+	margin: 1rem 0;
+}
+
+code {
+	font-size: 0.88em;
+	background: var(--surface-2);
+	padding: 0.15em 0.4em;
+	border-radius: 4px;
+}
+
+pre code {
+	background: none;
+	padding: 0;
+	font-size: inherit;
+}
+
+/* Touch targets */
+button,
+[role='button'] {
+	min-height: 44px;
+	min-width: 44px;
+}
+
+/* Container utility */
+.container {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 2rem 1.5rem;
+}
+
+@media (max-width: 640px) {
+	.container {
+		padding: 1.5rem 1rem;
+	}
+
+	pre {
+		margin-left: -1rem;
+		margin-right: -1rem;
+		border-radius: 0;
+	}
+}

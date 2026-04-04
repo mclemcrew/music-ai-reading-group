@@ -1,0 +1,192 @@
+---
+title: "DDSP From Scratch"
+subtitle: "A minimal differentiable synthesizer in PyTorch (trying to understand the paper)"
+date: "2026-03-25"
+authors: ["Music AI Reading Group"]
+tags: ["ddsp", "signal-processing", "pytorch"]
+description: "Building a differentiable digital signal processing synthesizer from scratch, with interactive visualizations and audio experiments from our reading group session on Engel et al. (2020)."
+published: true
+badge: "music-ai-reading-group"
+excalidraw: "https://link.excalidraw.com/l/8sDmlvduhSt/7mA11Gu7KXU"
+---
+
+<script>
+	import PhaseAccumulation from '$lib/components/viz/PhaseAccumulation.svelte';
+	import HarmonicSeries from '$lib/components/viz/HarmonicSeries.svelte';
+	import FilteredNoise from '$lib/components/viz/FilteredNoise.svelte';
+	import TrainingConvergence from '$lib/components/viz/TrainingConvergence.svelte';
+	import SignalChain from '$lib/components/viz/SignalChain.svelte';
+	import AudioGrid from '$lib/components/audio/AudioGrid.svelte';
+	import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
+</script>
+
+## What is DDSP?
+
+Most generative models for audio operate directly on waveform samples (i.e., raw audio) or frequency-domain representations (e.g., Fourier transforms), and while these approaches are general enough to express any signal, they do not leverage existing knowledge of how sound is produced and perceived, requiring the model to learn physics from scratch. *Differentiable Digital Signal Processing* (DDSP), introduced by [Engel et al. (2020)](https://arxiv.org/abs/2001.04643), takes a different approach, integrating classic signal processing components (e.g., oscillators, filters, reverb) into automatic differentiation frameworks. This allows gradients to flow from the audio output back through the entire synthesis pipeline, making every stage amenable to backpropagation.
+
+Most of what makes DDSP effective in practice comes from *inductive bias*. Rather than asking a neural network to learn the physics of sound generation from data, DDSP encodes that structure directly into the model architecture, and the network need only learn to control it. This page accompanies our reading group session on [Engel et al. (2020)](https://arxiv.org/pdf/2001.04643), where we walked through the paper's core ideas and built a minimal DDSP synthesizer from scratch in PyTorch to help ground our understanding. Below we present interactive visualizations of the main concepts, audio examples at various stages of training, and resources for further reading.
+
+## Core Concepts
+
+<div class="concepts">
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<path d="M5 56 Q15 46 25 56 Q35 66 45 56 Q55 46 65 56 Q75 66 85 56 L95 56" stroke="#e07020" stroke-width="1.8" opacity="0.35"/>
+				<path d="M5 40 Q10 32 15 40 Q20 48 25 40 Q30 32 35 40 Q40 48 45 40 Q50 32 55 40 Q60 48 65 40 Q70 32 75 40 Q80 48 85 40 L95 40" stroke="#e07020" stroke-width="1.5" opacity="0.55"/>
+				<path d="M5 22 Q8 16 11 22 Q14 28 17 22 Q20 16 23 22 Q26 28 29 22 Q32 16 35 22 Q38 28 41 22 Q44 16 47 22 Q50 28 53 22 Q56 16 59 22 Q62 28 65 22 Q68 16 71 22 Q74 28 77 22 Q80 16 83 22 Q86 28 89 22 Q92 16 95 22" stroke="#e07020" stroke-width="1.2" opacity="0.8"/>
+				<text x="5" y="10" fill="#e07020" font-size="8" font-family="DM Mono, monospace" opacity="0.6">f0, 2f0, 3f0</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--orange)">Harmonic Oscillator</h4>
+			<p>A bank of sinusoids at integer multiples of f0. Phase is accumulated via cumulative sum, which keeps oscillators continuous when frequency changes (i.e., the oscillator adjusts its speed from its current position rather than jumping). Implemented as <code>cumsum</code> + <code>sin</code> in PyTorch.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<path d="M5 55 L9 42 L13 58 L17 38 L21 52 L25 35 L29 50 L33 40 L37 56 L41 33 L45 48 L49 36 L53 54 L57 30 L61 50 L65 38 L69 52 L73 34 L77 46 L81 55 L85 37 L89 50 L93 42 L97 48" stroke="#6b7280" stroke-width="0.8" opacity="0.35"/>
+				<path d="M5 50 Q25 20 50 30 Q75 40 95 25" stroke="#1a9e8f" stroke-width="2" stroke-linecap="round"/>
+				<text x="5" y="10" fill="#1a9e8f" font-size="8" font-family="DM Mono, monospace" opacity="0.6">H(f)</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--teal)">Filtered Noise</h4>
+			<p>White noise shaped by a learned, time-varying filter (i.e., a per-frame EQ curve). We FFT each noise frame, multiply by the predicted filter magnitudes, and IFFT back. This captures the stochastic components of sound (e.g., bow noise, breath) that sinusoidal harmonics cannot easily represent.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<rect x="5" y="8" width="90" height="10" rx="2" stroke="#7c4dff" stroke-width="1" opacity="0.3"/>
+				<rect x="15" y="22" width="70" height="10" rx="2" stroke="#7c4dff" stroke-width="1" opacity="0.45"/>
+				<rect x="25" y="36" width="50" height="10" rx="2" stroke="#7c4dff" stroke-width="1" opacity="0.6"/>
+				<rect x="32" y="50" width="36" height="10" rx="2" stroke="#7c4dff" stroke-width="1" opacity="0.8"/>
+				<text x="5" y="68" fill="#7c4dff" font-size="7" font-family="DM Mono, monospace" opacity="0.6">64 .. 2048</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--violet)">Multi-Scale Spectral Loss</h4>
+			<p>We compare magnitude spectrograms, not raw waveforms, at six FFT sizes (64 to 2048). The linear term penalizes errors in loud components while the log term catches subtle, perceptually salient details. In a production analogy, this is roughly akin to checking a mix on six different monitoring systems.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<rect x="5" y="22" width="28" height="28" rx="4" stroke="#2979ff" stroke-width="1.2"/>
+				<circle cx="19" cy="30" r="2.5" fill="#2979ff" opacity="0.4"/>
+				<circle cx="12" cy="40" r="2.5" fill="#2979ff" opacity="0.4"/>
+				<circle cx="26" cy="40" r="2.5" fill="#2979ff" opacity="0.4"/>
+				<line x1="33" y1="36" x2="47" y2="36" stroke="#2979ff" stroke-width="1" opacity="0.4" stroke-dasharray="2 2"/>
+				<polygon points="47,33 52,36 47,39" fill="#2979ff" opacity="0.4"/>
+				<path d="M55 36 Q62 22 69 36 Q76 50 83 36 Q90 22 97 36" stroke="#2979ff" stroke-width="1.8"/>
+				<text x="5" y="10" fill="#2979ff" font-size="8" font-family="DM Mono, monospace" opacity="0.6">300x fewer</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--blue)">Inductive Bias</h4>
+			<p>The oscillator bank encodes the physics of sound production (e.g., harmonic structure, phase coherence) that a neural network would otherwise need to learn from data. We posit that this is the paper's most salient contribution: DDSP models achieve high-fidelity synthesis at roughly 300x fewer parameters than WaveNet.</p>
+		</div>
+	</div>
+</div>
+
+## Phase Accumulation
+
+<p class="muted">A challenge in oscillator design is maintaining phase continuity when frequency changes. The naive approach, computing phase as <code>2&pi; &middot; f &middot; t</code>, produces a discontinuity (an audible click) because the phase value jumps when f changes. Phase accumulation resolves this by maintaining a running sum of frequency-dependent increments, allowing the oscillator to adjust its rate of oscillation from its current position. An analogy is a turntable: changing the platter speed does not move the needle, but it changes how fast the groove passes beneath it. Click the button below to trigger a frequency change and observe the difference.</p>
+
+<PhaseAccumulation />
+
+## Harmonic Series
+
+<p class="muted">In the Harmonic plus Noise model (<a href="https://www.dafx.de/paper-archive/1998/pdf/Serra.pdf">Serra and Smith, 1990</a>), all harmonic frequencies are constrained to be integer multiples of a fundamental frequency f0. This means that a single parameter controls the position of every harmonic in the spectrum, and the relative amplitudes c_k (bar heights) determine the timbre independently of pitch. Drag the slider to observe how adjusting f0 moves all harmonics in lockstep; this is why the neural network can control pitch and timbre as separate, interpretable dimensions.</p>
+
+<HarmonicSeries />
+
+## Filtered Noise
+
+<p class="muted">Natural sounds contain both harmonic and stochastic components (e.g., the breathy quality of a flute, the scrape of a bow on a string). The filtered noise synthesizer addresses the latter by starting with white noise, which has equal energy at all frequencies (we assume Gaussian at this point), and shaping it through a learned, time-varying filter. In practice, the neural network predicts filter magnitudes H_l for each frame, and we apply them via pointwise multiplication in the frequency domain, which is equivalent to time-domain convolution but at a significantly lower computational cost. Drag the control points below to sculpt the noise spectrum and observe how the filter shapes the output.</p>
+
+<FilteredNoise />
+
+## Training: Watching the Optimizer Learn
+
+<p class="muted">Given that every operation in our synthesizer is differentiable (i.e., <code>cumsum</code>, <code>sin</code>, <code>fft</code>, pointwise multiplication), gradients can flow from the multi-scale spectral loss all the way back to the synthesis parameters. In the visualization below, we simulate this optimization process: the predicted waveform (orange) begins with random harmonic amplitudes and progressively converges toward the target (teal) as the loss decreases. In the real DDSP pipeline, a neural encoder-decoder predicts these parameters from audio, but the principle of gradient flow through the synthesizer remains the same.</p>
+
+<TrainingConvergence />
+
+## Signal Chain
+
+<SignalChain />
+
+## Audio Experiments
+
+<p class="muted">In each experiment below, we provide f0 as ground truth, mirroring the real DDSP pipeline where a pre-trained pitch tracker (<a href="https://arxiv.org/abs/1802.06182">CREPE; Kim et al., 2018</a>) extracts fundamental frequency from the audio. We found through experimentation that optimizing f0 directly through <code>sin(cumsum(...))</code> produces a highly non-convex loss landscape, which may explain the paper's design choice to condition on extracted pitch rather than learning it end-to-end. The optimizer learns only harmonic amplitudes and noise filter parameters. Click any cell to play and observe how the reconstruction improves over training steps.</p>
+
+### Experiment 1: A440, 3 harmonics
+
+Target: a 440 Hz fundamental with 2nd and 3rd harmonics at relative amplitudes of 1.0, 0.5, and 0.25, producing a simple instrument-like timbre.
+
+<AudioGrid prefix="a440" steps={["target","0000","0500","1000","1500","2000","2500","3000"]} lossImage="/audio/a440_loss.png" lossAlt="A440 loss curve" />
+
+### Experiment 2: C261, 6 harmonics
+
+Target: 261.63 Hz (middle C) with six harmonics of decreasing amplitude. The richer harmonic content presents a more challenging optimization landscape for the synthesizer.
+
+<AudioGrid prefix="c261" steps={["target","0000","0500","1000","1500","2000","2500","3000"]} lossImage="/audio/c261_loss.png" lossAlt="C261 loss curve" />
+
+### Experiment 3: E329, odd harmonics (clarinet-like)
+
+Target: 329.63 Hz with only odd-numbered harmonics (1st, 3rd, 5th, 7th), with even harmonics zeroed out. This produces the characteristically hollow timbre associated with closed-pipe resonators (e.g., clarinet).
+
+<AudioGrid prefix="e329_odd" steps={["target","0000","0500","1000","1500","2000","2500","3000"]} lossImage="/audio/e329_odd_loss.png" lossAlt="E329 odd harmonics loss curve" />
+
+## Run It Yourself
+
+<div class="run-box">
+
+```bash
+# Install uv (Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and set up
+git clone https://github.com/mclemcrew/music-ai-reading-group.git
+cd music-ai-reading-group/experiments/ddsp
+
+# Install dependencies (uv reads pyproject.toml automatically)
+uv sync
+
+# Run the experiments (generates audio snapshots in docs/audio/)
+uv run ddsp_from_sratch.py
+```
+
+</div>
+
+## Papers
+
+<div class="resources-grid">
+	<ResourceLink href="https://arxiv.org/pdf/2001.04643" category="Paper" categoryType="paper" label="DDSP: Differentiable Digital Signal Processing" host="Engel et al. 2020" />
+	<ResourceLink href="https://arxiv.org/pdf/2308.15422" category="Paper" categoryType="paper" label="A Review of Differentiable Digital Signal Processing" host="Hayes et al. 2023" />
+	<ResourceLink href="https://arxiv.org/pdf/2407.08889" category="Paper" categoryType="paper" label="Differentiable DSP for Audio Effects" host="arxiv.org" />
+	<ResourceLink href="https://dafx.de/paper-archive/2024/papers/DAFx24_paper_51.pdf" category="Paper" categoryType="paper" label="DAFx 2024: DDSP Applications" host="dafx.de" />
+	<ResourceLink href="https://liacs.leidenuniv.nl/~bakkerem2/api/presentation06_slides.pdf" category="Slides" categoryType="paper" label="DDSP Presentation Slides" host="Leiden University" />
+</div>
+
+## Demos & Tools
+
+<div class="resources-grid">
+	<ResourceLink href="https://intro2ddsp.github.io/intro.html" category="Tutorial" categoryType="demo" label="Intro to DDSP (Interactive)" host="intro2ddsp.github.io" />
+	<ResourceLink href="https://sites.research.google/tonetransfer" category="Demo" categoryType="demo" label="Tone Transfer" host="Google Research" />
+	<ResourceLink href="https://magenta.withgoogle.com/ddsp-vst" category="Plugin" categoryType="tool" label="DDSP-VST" host="Google Magenta" />
+	<ResourceLink href="https://rodrigo-castellon.github.io/midi2params/" category="Demo" categoryType="demo" label="MIDI2Params" host="rodrigo-castellon.github.io" />
+	<ResourceLink href="https://midi-ddsp.github.io" category="Demo" categoryType="demo" label="MIDI-DDSP" host="midi-ddsp.github.io" />
+	<ResourceLink href="https://reinliu.github.io/DDSP-SFX/" category="Demo" categoryType="demo" label="DDSP-SFX" host="reinliu.github.io" />
+	<ResourceLink href="https://deepmind.google/research/wavenet/" category="Background" categoryType="demo" label="WaveNet" host="DeepMind" />
+	<ResourceLink href="https://github.com/marl/crepe" category="Code" categoryType="tool" label="CREPE Pitch Tracker" host="github.com/marl" />
+	<ResourceLink href="https://magenta.withgoogle.com/datasets/nsynth" category="Dataset" categoryType="dataset" label="NSynth Dataset" host="Google Magenta" />
+	<ResourceLink href="https://link.excalidraw.com/l/8sDmlvduhSt/7mA11Gu7KXU" category="Diagram" categoryType="tool" label="DDSP Architecture Drawing" host="Excalidraw" />
+	<ResourceLink href="https://github.com/mclemcrew/music-ai-reading-group" category="Code · Examples" categoryType="tool" label="Reading Group Repo (all examples + from-scratch scripts)" host="github.com/mclemcrew" />
+</div>

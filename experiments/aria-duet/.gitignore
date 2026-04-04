@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Model checkpoints (~1.4GB)
+checkpoints/*.safetensors
+
+# SoundFonts for FluidSynth fallback
+soundfonts/*.sf2
+
+# Demo session recordings
+recordings/*.mid
+
+# Logs
+demo.log

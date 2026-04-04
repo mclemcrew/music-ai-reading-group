@@ -1,0 +1,31 @@
+{
+  "name": "music-ai-reading-group",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "new-post": "bash scripts/new-post.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mclemcrew/music-ai-reading-group.git"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.55.0",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "mdsvex": "^0.12.7",
+    "svelte": "^5.55.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.3"
+  },
+  "dependencies": {
+    "animejs": "^4.3.6",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
+    "wavesurfer.js": "^7.12.5"
+  }
+}

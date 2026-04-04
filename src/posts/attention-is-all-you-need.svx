@@ -1,0 +1,30 @@
+---
+title: "Attention Is All You Need"
+subtitle: ""
+date: "2026-03-28"
+authors: ["Music AI Reading Group"]
+tags: []
+description: ""
+published: false
+---
+
+<script>
+  // Import components you need:
+  // import AudioGrid from '$lib/components/audio/AudioGrid.svelte';
+  // import AudioPlayer from '$lib/components/audio/AudioPlayer.svelte';
+  // import ManimVideo from '$lib/components/media/ManimVideo.svelte';
+  // import ResponsiveImage from '$lib/components/media/ResponsiveImage.svelte';
+  // import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
+  //
+  // Visualization components:
+  // import PhaseAccumulation from '$lib/components/viz/PhaseAccumulation.svelte';
+  // import HarmonicSeries from '$lib/components/viz/HarmonicSeries.svelte';
+  // import FilteredNoise from '$lib/components/viz/FilteredNoise.svelte';
+  // import TrainingConvergence from '$lib/components/viz/TrainingConvergence.svelte';
+  // import SignalChain from '$lib/components/viz/SignalChain.svelte';
+</script>
+
+## Introduction
+
+Start writing here...
+
