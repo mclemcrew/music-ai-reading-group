@@ -62,8 +62,9 @@
 			gap: 0.75rem;
 		}
 		.concept-figure {
-			width: 80px;
-			height: 56px;
+			width: min(320px, 85vw);
+			height: auto;
+			aspect-ratio: 100 / 72;
 		}
 	}
 </style>

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_LABEL, observeVisibility } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_LABEL, observeVisibility, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let container: HTMLElement;
@@ -114,10 +114,10 @@
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 
-		const padL = 28;
-		const padR = 10;
-		const padT = 8;
-		const padB = 32;
+		const padL = canvasPad(w, 28);
+		const padR = canvasPad(w, 10);
+		const padT = canvasPad(w, 8);
+		const padB = canvasPad(w, 32);
 
 		const gridW = w - padL - padR;
 		const gridH = h - padT - padB;
@@ -131,7 +131,7 @@
 
 			// Row label
 			ctx.fillStyle = ROW_COLORS[r];
-			ctx.font = '10px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 10);
 			ctx.textAlign = 'right';
 			ctx.fillText(ROW_LABELS[r], padL - 5, baseY + cellH / 2 + 3);
 
@@ -159,7 +159,7 @@
 
 					// "?" text
 					ctx.fillStyle = '#9ca3af';
-					ctx.font = `${Math.min(ch * 0.55, 12)}px "DM Mono", monospace`;
+					ctx.font = `${Math.max(8, Math.min(ch * 0.55, 12))}px "DM Mono", monospace`;
 					ctx.textAlign = 'center';
 					ctx.textBaseline = 'middle';
 					ctx.fillText('?', cx + cw / 2, cy + ch / 2);
@@ -207,7 +207,7 @@
 		const pct = Math.round((revealedCount / totalCells) * 100);
 
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '11px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 11);
 		ctx.textAlign = 'left';
 		ctx.fillText(`pass ${pass} / ${MAX_PASS}`, padL, h - 10);
 		ctx.textAlign = 'right';

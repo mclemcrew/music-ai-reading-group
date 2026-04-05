@@ -34,7 +34,8 @@
 		justify-content: center;
 	}
 
-	.viz-btn:hover {
+	.viz-btn:hover,
+	.viz-btn:active {
 		border-color: var(--btn-color);
 		color: var(--btn-color);
 	}

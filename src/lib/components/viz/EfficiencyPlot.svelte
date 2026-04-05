@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let hoveredIdx = $state(-1);
@@ -62,10 +62,10 @@
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 
-		const padX = 44;
-		const padY = 14;
-		const padBottom = 34;
-		const padRight = 12;
+		const padX = canvasPad(w, 44);
+		const padY = canvasPad(w, 14);
+		const padBottom = canvasPad(w, 34);
+		const padRight = canvasPad(w, 12);
 		const innerW = w - padX - padRight;
 		const innerH = h - padY - padBottom;
 
@@ -94,7 +94,7 @@
 			ctx.lineTo(x, padY + innerH);
 			ctx.stroke();
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '7.5px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 10);
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'alphabetic';
 			const labels: Record<number, string> = { 4: '10K', 5: '100K', 6: '1M', 7: '10M', 8: '100M' };
@@ -109,7 +109,7 @@
 			ctx.lineTo(padX + innerW, y);
 			ctx.stroke();
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '7.5px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 10);
 			ctx.textAlign = 'right';
 			ctx.textBaseline = 'middle';
 			ctx.fillText(f + '%', padX - 5, y);
@@ -117,7 +117,7 @@
 
 		// Axis labels
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '8px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 10);
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'alphabetic';
 		ctx.fillText('parameters (log scale)', padX + innerW / 2, h - 4);
@@ -208,11 +208,11 @@
 			const tx = Math.max(8, bx) + 10;
 			const ty = Math.max(4, by) + 16;
 			ctx.fillStyle = m.color;
-			ctx.font = 'bold 8.5px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 11, 'bold');
 			ctx.textAlign = 'left';
 			ctx.fillText(m.name, tx, ty);
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '7.5px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 10);
 			ctx.fillText(m.note, tx, ty + 14);
 			ctx.fillText(
 				m.f + '% F  ·  ' + (m.log10p < 5 ? Math.round(10 ** m.log10p).toLocaleString() : (10 ** m.log10p / 1e6).toFixed(0) + 'M') + ' params',
@@ -275,9 +275,28 @@
 				draw();
 			}
 		}}
+		ontouchstart={(e) => {
+			e.preventDefault();
+			const pos = getPos(e);
+			hoveredIdx = findHovered(pos.x, pos.y);
+			draw();
+		}}
+		ontouchmove={(e) => {
+			e.preventDefault();
+			const pos = getPos(e);
+			const idx = findHovered(pos.x, pos.y);
+			if (idx !== hoveredIdx) {
+				hoveredIdx = idx;
+				draw();
+			}
+		}}
+		ontouchend={() => {
+			hoveredIdx = -1;
+			draw();
+		}}
 	></canvas>
 	{#snippet caption()}
-		F-scores from each model's own benchmark — different datasets, different difficulty. NMP→GuitarSet (real multi-instrument), O&F(*)→MAPS (piano, mostly synthetic), MT3→MAESTRO, Vocano→Molina. Cross-model comparisons are approximate. Hover a point for details.
+		F-scores from each model's own benchmark — different datasets, different difficulty. NMP→GuitarSet (real multi-instrument), O&F(*)→MAPS (piano, mostly synthetic), MT3→MAESTRO, Vocano→Molina. Cross-model comparisons are approximate. Tap or hover a point for details.
 	{/snippet}
 </VizPanel>
 
@@ -286,5 +305,6 @@
 		display: block;
 		width: 100%;
 		cursor: crosshair;
+		touch-action: none;
 	}
 </style>

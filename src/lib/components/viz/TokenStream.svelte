@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_LABEL, observeVisibility } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_LABEL, observeVisibility, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let visible = false;
@@ -47,8 +47,8 @@
 
 		const cols = 6;
 		const rows = 2;
-		const padX = 10;
-		const padY = 8;
+		const padX = canvasPad(w, 10);
+		const padY = canvasPad(w, 8);
 		const keyH = 28;
 		const descH = 20;
 		const gridH = h - padY * 2 - keyH - descH;
@@ -83,7 +83,7 @@
 			// Note name on active keys (at bottom of white key, below where black keys sit)
 			if (isActive) {
 				ctx.fillStyle = '#2979ff';
-				ctx.font = 'bold 11px "DM Mono", monospace';
+				ctx.font = canvasFont(w, 11, 'bold');
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'alphabetic';
 				const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -104,7 +104,7 @@
 		});
 		// Orientation labels: C4, C5
 		ctx.fillStyle = 'rgba(0,0,0,0.25)';
-		ctx.font = '10px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 10);
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'alphabetic';
 		ctx.fillText('C4', padX + keyW / 2, kbY + whiteH - 3);
@@ -144,7 +144,7 @@
 
 			// Token label text
 			ctx.fillStyle = isActive ? tok.color : tok.color + 'aa';
-			ctx.font = isActive ? 'bold 12px "DM Mono", monospace' : '12px "DM Mono", monospace';
+			ctx.font = isActive ? canvasFont(w, 12, 'bold') : canvasFont(w, 12);
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
 			ctx.fillText(tok.label, cx, cy);
@@ -157,11 +157,11 @@
 		if (activeIdx >= 0) {
 			const tok = tokens[activeIdx];
 			ctx.fillStyle = tok.color;
-			ctx.font = '12px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 12);
 			ctx.fillText('→ ' + tok.desc, padX + 2, descY + 13);
 		} else {
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '12px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 12);
 			ctx.fillText('Press Play to step through the token sequence', padX + 2, descY + 13);
 		}
 	}

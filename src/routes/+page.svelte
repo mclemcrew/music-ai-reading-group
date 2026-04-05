@@ -116,41 +116,51 @@
 	const BAR_COUNT = 36;
 
 	onMount(() => {
-		// Entrance: bars grow up from nothing, left to right
-		animate(bars, {
-			scaleY: [0, 1],
-			opacity: [0, 0.65],
-			duration: 550,
-			delay: stagger(18, { start: 150 }),
-			ease: 'outExpo'
-		});
+		const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-		// Continuous traveling sine wave — 2 wavelengths scrolling left→right
-		let raf: number;
-		function tick(ts: number) {
-			const t = ts * 0.00125; // ~1 full cycle per 5s
-			bars.forEach((bar, i) => {
-				const phase = (i / (BAR_COUNT - 1)) * Math.PI * 4; // 2 wavelengths
-				const s = 0.08 + 0.9 * (0.5 + 0.5 * Math.sin(t - phase));
-				bar.style.transform = `scaleY(${s.toFixed(3)})`;
+		if (reducedMotion) {
+			// Show everything immediately, skip entrance animations
+			bars.forEach((bar) => { bar.style.opacity = '0.55'; bar.style.transform = 'scaleY(0.5)'; });
+		} else {
+			// Entrance: bars grow up from nothing, left to right
+			animate(bars, {
+				scaleY: [0, 1],
+				opacity: [0, 0.65],
+				duration: 550,
+				delay: stagger(18, { start: 150 }),
+				ease: 'outExpo'
 			});
+
+			// Hero text entrance
+			animate(heroRef.querySelectorAll('.hero-text > *'), {
+				translateY: [30, 0],
+				opacity: [0, 1],
+				delay: stagger(80, { start: 200 }),
+				duration: 700,
+				ease: 'outExpo'
+			});
+		}
+
+		// Continuous traveling sine wave — skip for reduced motion
+		let raf: number;
+		if (!reducedMotion) {
+			function tick(ts: number) {
+				const t = ts * 0.00125;
+				bars.forEach((bar, i) => {
+					const phase = (i / (BAR_COUNT - 1)) * Math.PI * 4;
+					const s = 0.08 + 0.9 * (0.5 + 0.5 * Math.sin(t - phase));
+					bar.style.transform = `scaleY(${s.toFixed(3)})`;
+				});
+				raf = requestAnimationFrame(tick);
+			}
 			raf = requestAnimationFrame(tick);
 		}
-		raf = requestAnimationFrame(tick);
-
-		// Hero text entrance
-		animate(heroRef.querySelectorAll('.hero-text > *'), {
-			translateY: [30, 0],
-			opacity: [0, 1],
-			delay: stagger(80, { start: 200 }),
-			duration: 700,
-			ease: 'outExpo'
-		});
 
 		const scheduleObs = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((e) => {
 					if (!e.isIntersecting) return;
+					if (reducedMotion) return scheduleObs.disconnect();
 					animate(scheduleRef.querySelectorAll('.session-card'), {
 						translateY: [24, 0],
 						opacity: [0, 1],
@@ -170,6 +180,7 @@
 				entries.forEach((e) => {
 					if (!e.isIntersecting) return;
 					if (!postsRef) return;
+					if (reducedMotion) return postsObs.disconnect();
 					animate(postsRef.querySelectorAll('.post-card'), {
 						translateY: [20, 0],
 						opacity: [0, 1],
@@ -184,7 +195,7 @@
 		);
 		if (postsRef) postsObs.observe(postsRef);
 
-		return () => cancelAnimationFrame(raf);
+		return () => { if (raf) cancelAnimationFrame(raf); };
 	});
 </script>
 
@@ -866,7 +877,8 @@
 		transition: all 0.2s ease;
 	}
 
-	.post-card:hover {
+	.post-card:hover,
+	.post-card:active {
 		border-color: var(--orange);
 		box-shadow: 0 4px 24px var(--orange-glow);
 		text-decoration: none;

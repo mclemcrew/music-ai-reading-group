@@ -91,11 +91,13 @@
 		transition: all 0.2s ease;
 	}
 
-	.ws-item:hover {
+	.ws-item:hover,
+	.ws-item:active {
 		border-color: var(--orange);
 	}
 
-	.ws-item.target:hover {
+	.ws-item.target:hover,
+	.ws-item.target:active {
 		border-color: var(--teal);
 	}
 
@@ -145,7 +147,8 @@
 		flex-shrink: 0;
 	}
 
-	.ws-play-btn:hover {
+	.ws-play-btn:hover,
+	.ws-play-btn:active {
 		border-color: var(--orange);
 		color: var(--orange);
 	}

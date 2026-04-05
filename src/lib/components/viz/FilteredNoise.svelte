@@ -3,7 +3,7 @@
 	import { animate } from 'animejs';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	const nPoints = 10;
@@ -38,8 +38,8 @@
 		const { ctx, w, h } = setupCanvas(canvas);
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
-		const padB = 30,
-			padT = 10;
+		const padB = canvasPad(w, 30),
+			padT = canvasPad(w, 10);
 		const plotH = h - padB - padT;
 
 		ctx.fillStyle = CANVAS_BG;
@@ -55,7 +55,7 @@
 
 		// Freq labels
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '12px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 12);
 		const labels = ['0', '1k', '2k', '3k', '4k', '5k', '6k', '7k', '8k'];
 		labels.forEach((l, i) => {
 			ctx.fillText(l, (i / (labels.length - 1)) * w - 5, h - 16);

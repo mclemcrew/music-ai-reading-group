@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let running = true;
@@ -86,9 +86,9 @@
 		ctx.lineJoin = 'round';
 
 		const n = harmonics.length;
-		const padX = 44;
-		const padY = 10;
-		const padBottom = 40;
+		const padX = canvasPad(w, 44);
+		const padY = canvasPad(w, 10);
+		const padBottom = canvasPad(w, 40);
 		const innerW = w - padX - 14;
 		const innerH = h - padY - padBottom;
 		const rowH = innerH / n;
@@ -147,7 +147,7 @@
 
 			// Row label (left side)
 			ctx.fillStyle = i === 1 ? '#1a9e8f' : CANVAS_LABEL;
-			ctx.font = '12px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 12);
 			ctx.textAlign = 'right';
 			ctx.textBaseline = 'middle';
 			ctx.fillText(harm.label, padX - 6, rowY + rowH / 2);
@@ -157,7 +157,7 @@
 				const labelAlpha = 1 - stackT / 0.4;
 				ctx.globalAlpha = labelAlpha * 0.8;
 				ctx.fillStyle = harm.color;
-				ctx.font = '10px "DM Mono", monospace';
+				ctx.font = canvasFont(w, 10);
 				ctx.textAlign = 'center';
 				ctx.fillText(harm.hz + ' Hz', rawX, rowY + 10);
 				ctx.globalAlpha = 1;
@@ -180,7 +180,7 @@
 			if (stackT > 0.7) {
 				const labelAlpha = (stackT - 0.7) / 0.3;
 				ctx.fillStyle = `rgba(224,112,32,${labelAlpha * 0.8})`;
-				ctx.font = '11px "DM Mono", monospace';
+				ctx.font = canvasFont(w, 11);
 				ctx.textAlign = 'center';
 				ctx.fillText('3×3 kernel', fundPx, padY + innerH + 16);
 			}
@@ -191,7 +191,7 @@
 			const axAlpha = 1 - stackT / 0.2;
 			ctx.globalAlpha = axAlpha * 0.5;
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '10px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 10);
 			ctx.textAlign = 'center';
 			ctx.fillText('← frequency (CQT, log scale) →', padX + innerW / 2, padY + innerH + 16);
 			ctx.globalAlpha = 1;
@@ -199,7 +199,7 @@
 
 		// State description at bottom
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '11px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 11);
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'alphabetic';
 		const stateLabel =
@@ -214,7 +214,7 @@
 		if (stackT > 0.95) {
 			const a = (stackT - 0.95) / 0.05;
 			ctx.fillStyle = `rgba(224,112,32,${a * 0.85})`;
-			ctx.font = '11px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 11);
 			ctx.textAlign = 'right';
 			ctx.fillText('16,782 params total', padX + innerW - 4, padY + 16);
 		}

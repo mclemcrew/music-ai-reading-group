@@ -34,7 +34,8 @@
 		transition: all 0.2s ease;
 	}
 
-	.resource-link:hover {
+	.resource-link:hover,
+	.resource-link:active {
 		border-color: var(--orange);
 		box-shadow: 0 2px 12px var(--orange-glow);
 		text-decoration: none;

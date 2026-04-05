@@ -164,7 +164,15 @@
 	}
 
 	.post-content {
-		line-height: 1.6;
+		line-height: 1.65;
+	}
+
+	/* Constrain prose to comfortable reading measure, but let
+	   visualizations, grids, and run boxes use full container width */
+	.post-content :global(p),
+	.post-content :global(ul),
+	.post-content :global(ol) {
+		max-width: 65ch;
 	}
 
 	.post-content :global(section) {
@@ -238,14 +246,15 @@
 			gap: 0.75rem;
 		}
 		.post-content :global(.concept-figure) {
-			width: 80px;
-			height: 56px;
+			width: min(320px, 85vw);
+			height: auto;
+			aspect-ratio: 100 / 72;
 		}
 	}
 
 	.post-content :global(.resources-grid) {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 		gap: 0.75rem;
 		margin: 1rem 0;
 	}

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let f0 = $state(440);
@@ -81,7 +81,7 @@
 		const barRegionH = h * 0.55;
 		const waveRegionY = h * 0.62;
 		const waveRegionH = h * 0.32;
-		const pad = 20;
+		const pad = canvasPad(w, 20);
 		const barAreaW = w - pad * 2;
 		const slotW = barAreaW / nHarmonics;
 		const barW = Math.min(36, slotW * 0.55);
@@ -126,7 +126,7 @@
 			ctx.fill();
 
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '12px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 12);
 			ctx.textAlign = 'center';
 			ctx.fillText(
 				freq >= 1000 ? (freq / 1000).toFixed(1) + 'k' : String(freq),
@@ -303,16 +303,17 @@
 	input[type='range'] {
 		-webkit-appearance: none;
 		width: 140px;
-		height: 4px;
+		height: 6px;
 		background: var(--border);
-		border-radius: 2px;
+		border-radius: 3px;
 		outline: none;
+		padding: 10px 0;
 	}
 
 	input[type='range']::-webkit-slider-thumb {
 		-webkit-appearance: none;
-		width: 20px;
-		height: 20px;
+		width: 28px;
+		height: 28px;
 		border-radius: 50%;
 		background: var(--orange);
 		cursor: pointer;
