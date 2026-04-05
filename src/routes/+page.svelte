@@ -84,7 +84,8 @@
 					authors: 'Garcia, Tsuda, Shier, Bryan, Fierro, Agostinelli',
 					year: 2023,
 					link: 'https://arxiv.org/abs/2307.04686',
-					hasPost: false,
+					hasPost: true,
+					postSlug: 'music-generation',
 					excalidraw: 'https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C'
 				},
 				{
@@ -92,7 +93,8 @@
 					authors: 'Thickstun, Hall, Donahue, Liang',
 					year: 2023,
 					link: 'https://arxiv.org/abs/2306.08620',
-					hasPost: false,
+					hasPost: true,
+					postSlug: 'music-generation',
 					excalidraw: 'https://link.excalidraw.com/l/8sDmlvduhSt/1IR71UHPGmr'
 				}
 			]

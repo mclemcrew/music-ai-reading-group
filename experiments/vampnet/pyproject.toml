@@ -1,0 +1,10 @@
+[project]
+name = "vampnet-experiments"
+version = "0.0.1"
+description = "VampNet and DAC music generation experiments"
+requires-python = ">=3.9,<3.12"
+dependencies = [
+    "vampnet @ git+https://github.com/hugofloresgarcia/vampnet.git",
+    "torchaudio==2.4.1",
+    "soundfile>=0.12.0",
+]

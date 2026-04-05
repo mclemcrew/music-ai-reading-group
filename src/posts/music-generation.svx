@@ -1,0 +1,311 @@
+---
+title: "Music Generation"
+subtitle: "From masked acoustic tokens to anticipatory symbolic infilling"
+date: "2026-04-02"
+authors: ["Music AI Reading Group"]
+tags: ["generation", "transformers", "vampnet", "masked-modeling", "midi"]
+description: "An overview of two approaches to music generation: VampNet's masked acoustic token modeling for audio-domain generation, and the Anticipatory Music Transformer's interleaved infilling for symbolic MIDI."
+published: true
+badge: "music-ai-reading-group"
+excalidraw: "https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C"
+---
+
+<script>
+	import CodebookRVQ from '$lib/components/viz/CodebookRVQ.svelte';
+	import MaskAndPredict from '$lib/components/viz/MaskAndPredict.svelte';
+	import AnticipationInterleave from '$lib/components/viz/AnticipationInterleave.svelte';
+	import AudioPlayer from '$lib/components/audio/AudioPlayer.svelte';
+	import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
+</script>
+
+## What is Music Generation?
+
+Music generation is the task of producing new musical content, either as raw audio waveforms or as symbolic notation (MIDI). Where transcription maps audio to symbols, generation goes the other direction, and the core challenge shifts from *recognition* to *coherence*: the model must produce output that is not only acoustically valid but musically sensible over time spans of seconds to minutes, maintaining structure, style, and harmonic consistency.
+
+This session covered two papers that approach generation from opposite ends of the representation spectrum. [VampNet (Garcia et al., 2023)](https://arxiv.org/abs/2307.04686) operates in the **audio domain**, encoding raw waveforms into discrete codec tokens and using a bidirectional masked transformer to generate music through iterative parallel decoding. The [Anticipatory Music Transformer (Thickstun et al., 2023)](https://arxiv.org/abs/2306.08620) operates in the **symbolic domain**, modeling MIDI events as a temporal point process and introducing an interleaving strategy that enables controllable infilling. Both use transformers, but their conditioning strategies are fundamentally different: VampNet attends bidirectionally (seeing both past and future context), while AMT uses a causal architecture with a novel anticipation mechanism that inserts future control signals into the autoregressive stream.
+
+<div class="concepts">
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Waveform on left -->
+				<path d="M4 36 Q8 24 12 36 Q16 48 20 36 Q24 24 28 36 Q32 48 36 36" stroke="#9ca3af" stroke-width="1.2" opacity="0.5"/>
+				<!-- Arrow -->
+				<line x1="38" y1="36" x2="44" y2="36" stroke="#dde0e6" stroke-width="1"/>
+				<polygon points="44,34 47,36 44,38" fill="#dde0e6"/>
+				<!-- Token grid -->
+				<rect x="50" y="14" width="8" height="8" rx="1" stroke="#e07020" stroke-width="1" opacity="0.8"/>
+				<rect x="60" y="14" width="8" height="8" rx="1" stroke="#e07020" stroke-width="1" opacity="0.6"/>
+				<rect x="70" y="14" width="8" height="8" rx="1" stroke="#e07020" stroke-width="1" opacity="0.7"/>
+				<rect x="80" y="14" width="8" height="8" rx="1" stroke="#e07020" stroke-width="1" opacity="0.5"/>
+				<rect x="50" y="24" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.8" opacity="0.5"/>
+				<rect x="60" y="24" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.8" opacity="0.4"/>
+				<rect x="70" y="24" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.8" opacity="0.6"/>
+				<rect x="80" y="24" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.8" opacity="0.3"/>
+				<rect x="50" y="34" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.6" opacity="0.35"/>
+				<rect x="60" y="34" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.6" opacity="0.45"/>
+				<rect x="70" y="34" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.6" opacity="0.3"/>
+				<rect x="80" y="34" width="8" height="8" rx="1" stroke="#e07020" stroke-width="0.6" opacity="0.5"/>
+				<text x="50" y="56" fill="#e07020" font-size="7" font-family="DM Mono, monospace" opacity="0.6">9 codebooks</text>
+				<text x="50" y="66" fill="#e07020" font-size="6" font-family="DM Mono, monospace" opacity="0.4">~90x compression</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--orange)">Discrete Audio Tokens</h4>
+			<p>Both VampNet and modern audio language models rely on neural audio codecs to convert continuous waveforms into discrete token sequences. The Descript Audio Codec (DAC) uses Residual Vector Quantization (RVQ) to compress 44.1 kHz audio into 9 codebook levels at ~90x compression. The first codebook captures coarse structure (pitch, rhythm), while deeper codebooks capture progressively finer spectral detail (timbre, texture). This gives the transformer a tractable discrete vocabulary to operate on, analogous to subword tokens in NLP.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Row of token squares, some masked -->
+				<rect x="6" y="26" width="12" height="12" rx="2" stroke="#1a9e8f" stroke-width="1.2" opacity="0.7"/>
+				<rect x="22" y="26" width="12" height="12" rx="2" stroke="#d1d5db" stroke-width="1" stroke-dasharray="2 1.5" opacity="0.6"/>
+				<text x="28" y="35" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="DM Mono, monospace">?</text>
+				<rect x="38" y="26" width="12" height="12" rx="2" stroke="#1a9e8f" stroke-width="1.2" opacity="0.7"/>
+				<rect x="54" y="26" width="12" height="12" rx="2" stroke="#d1d5db" stroke-width="1" stroke-dasharray="2 1.5" opacity="0.6"/>
+				<text x="60" y="35" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="DM Mono, monospace">?</text>
+				<rect x="70" y="26" width="12" height="12" rx="2" stroke="#1a9e8f" stroke-width="1.2" opacity="0.7"/>
+				<rect x="86" y="26" width="12" height="12" rx="2" stroke="#d1d5db" stroke-width="1" stroke-dasharray="2 1.5" opacity="0.6"/>
+				<text x="92" y="35" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="DM Mono, monospace">?</text>
+				<!-- Bidirectional arrows -->
+				<path d="M10 22 L50 10" stroke="#1a9e8f" stroke-width="0.8" opacity="0.4"/>
+				<path d="M76 22 L50 10" stroke="#1a9e8f" stroke-width="0.8" opacity="0.4"/>
+				<circle cx="50" cy="10" r="2" stroke="#1a9e8f" stroke-width="1" opacity="0.5"/>
+				<text x="6" y="54" fill="#1a9e8f" font-size="7" font-family="DM Mono, monospace" opacity="0.6">bidirectional</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--teal)">Masked Token Modeling</h4>
+			<p>VampNet borrows the masked language modeling objective from BERT, adapted for audio tokens. During training, a variable fraction of tokens are masked (replaced with a special [MASK] token), and the model predicts the original values. Critically, the transformer is bidirectional, attending to all unmasked tokens in both directions. This is a departure from autoregressive models (GPT-style), which can only condition on the past. Bidirectional context is essential for tasks like inpainting, where the model must respect both what came before and after a masked region.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Three rows showing progressive filling -->
+				<!-- Pass 1: mostly masked -->
+				<rect x="6" y="6" width="8" height="6" rx="1" stroke="#d1d5db" stroke-width="0.8" stroke-dasharray="1.5 1" opacity="0.5"/>
+				<rect x="16" y="6" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1" opacity="0.7"/>
+				<rect x="26" y="6" width="8" height="6" rx="1" stroke="#d1d5db" stroke-width="0.8" stroke-dasharray="1.5 1" opacity="0.5"/>
+				<rect x="36" y="6" width="8" height="6" rx="1" stroke="#d1d5db" stroke-width="0.8" stroke-dasharray="1.5 1" opacity="0.5"/>
+				<rect x="46" y="6" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1" opacity="0.7"/>
+				<rect x="56" y="6" width="8" height="6" rx="1" stroke="#d1d5db" stroke-width="0.8" stroke-dasharray="1.5 1" opacity="0.5"/>
+				<text x="72" y="12" fill="#9ca3af" font-size="6" font-family="DM Mono, monospace">pass 1</text>
+				<!-- Pass 6: half filled -->
+				<rect x="6" y="26" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1" opacity="0.5"/>
+				<rect x="16" y="26" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1" opacity="0.7"/>
+				<rect x="26" y="26" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1" opacity="0.6"/>
+				<rect x="36" y="26" width="8" height="6" rx="1" stroke="#d1d5db" stroke-width="0.8" stroke-dasharray="1.5 1" opacity="0.5"/>
+				<rect x="46" y="26" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1" opacity="0.7"/>
+				<rect x="56" y="26" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1" opacity="0.5"/>
+				<text x="72" y="32" fill="#9ca3af" font-size="6" font-family="DM Mono, monospace">pass 6</text>
+				<!-- Pass 12: fully filled -->
+				<rect x="6" y="46" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1.2" opacity="0.8"/>
+				<rect x="16" y="46" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1.2" opacity="0.7"/>
+				<rect x="26" y="46" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1.2" opacity="0.9"/>
+				<rect x="36" y="46" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1.2" opacity="0.7"/>
+				<rect x="46" y="46" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1.2" opacity="0.8"/>
+				<rect x="56" y="46" width="8" height="6" rx="1" stroke="#7c4dff" stroke-width="1.2" opacity="0.6"/>
+				<text x="72" y="52" fill="#7c4dff" font-size="6" font-family="DM Mono, monospace">pass 12</text>
+				<text x="6" y="68" fill="#7c4dff" font-size="7" font-family="DM Mono, monospace" opacity="0.6">~36 passes total</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--violet)">Iterative Parallel Decoding</h4>
+			<p>Rather than generating one token at a time (as in autoregressive models), VampNet generates all masked tokens simultaneously in each pass, then re-masks the least confident predictions and repeats. Over approximately 36 passes, the token grid transitions from fully masked to fully populated. This is significantly faster than autoregressive generation for equivalent sequence lengths, and the coarse-to-fine structure (predicting coarse codebooks first, then fine) ensures that high-level musical structure is established before fine spectral detail is filled in.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Timeline -->
+				<line x1="5" y1="36" x2="95" y2="36" stroke="#dde0e6" stroke-width="1"/>
+				<polygon points="93,34 97,36 93,38" fill="#dde0e6"/>
+				<!-- Control tokens above, interleaved -->
+				<rect x="12" y="18" width="12" height="10" rx="2" stroke="#e07020" stroke-width="1" opacity="0.7"/>
+				<text x="18" y="26" text-anchor="middle" fill="#e07020" font-size="5" font-family="DM Mono, monospace">ctrl</text>
+				<rect x="44" y="18" width="12" height="10" rx="2" stroke="#e07020" stroke-width="1" opacity="0.7"/>
+				<text x="50" y="26" text-anchor="middle" fill="#e07020" font-size="5" font-family="DM Mono, monospace">ctrl</text>
+				<rect x="76" y="18" width="12" height="10" rx="2" stroke="#e07020" stroke-width="1" opacity="0.7"/>
+				<text x="82" y="26" text-anchor="middle" fill="#e07020" font-size="5" font-family="DM Mono, monospace">ctrl</text>
+				<!-- Event tokens below -->
+				<rect x="24" y="42" width="12" height="10" rx="2" stroke="#2979ff" stroke-width="1" opacity="0.7"/>
+				<text x="30" y="50" text-anchor="middle" fill="#2979ff" font-size="5" font-family="DM Mono, monospace">evt</text>
+				<rect x="56" y="42" width="12" height="10" rx="2" stroke="#2979ff" stroke-width="1" opacity="0.7"/>
+				<text x="62" y="50" text-anchor="middle" fill="#2979ff" font-size="5" font-family="DM Mono, monospace">evt</text>
+				<!-- Delta bracket -->
+				<line x1="18" y1="14" x2="30" y2="14" stroke="#2979ff" stroke-width="0.8" opacity="0.5"/>
+				<text x="24" y="11" text-anchor="middle" fill="#2979ff" font-size="5.5" font-family="DM Mono, monospace" opacity="0.6">&delta;</text>
+				<text x="5" y="68" fill="#2979ff" font-size="7" font-family="DM Mono, monospace" opacity="0.6">interleaved</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--blue)">Anticipation</h4>
+			<p>The Anticipatory Music Transformer introduces a conditioning mechanism where control tokens (e.g., melody notes provided as input) are interleaved with event tokens (accompaniment to be generated) in the sequence, placed &delta;=5 seconds before the events they condition. This preserves locality, so each control appears close to the events it should influence, unlike seq2seq approaches which place all input tokens before all output tokens. The result is a causal autoregressive model that can nevertheless perform infilling and accompaniment tasks.</p>
+		</div>
+	</div>
+</div>
+
+## VampNet: Masked Acoustic Token Modeling
+
+[VampNet (Garcia et al., 2023)](https://arxiv.org/abs/2307.04686) is a non-autoregressive model for music audio generation. The key design choice is to work in the space of discrete audio tokens produced by the [Descript Audio Codec (DAC)](https://huggingface.co/descript/descript-audio-codec), a neural audio compression model that uses Residual Vector Quantization (RVQ) to encode 44.1 kHz audio into a matrix of discrete codes across 9 codebook levels. The first codebook (c0) captures coarse spectral structure, pitch contour, and rhythmic information; deeper codebooks (c1 through c8) capture progressively finer spectral details such as timbre nuance and high-frequency texture. Together, the 9 levels achieve approximately 90x compression while maintaining high perceptual fidelity.
+
+<CodebookRVQ />
+
+<p class="muted">Use the play buttons above to hear what each codebook level adds. With only c0, you get pitch and rhythm but the timbre is flat and metallic. By 4 levels the sound is recognizable. The final levels add the high-frequency detail that makes the reconstruction perceptually transparent. Try stepping through all 9 levels while listening.</p>
+
+The generation pipeline has two stages. A **coarse transformer** operates on the first codebook level (c0), predicting masked tokens using a bidirectional attention mechanism that can attend to all unmasked positions in the sequence, in both temporal directions. A **fine transformer** (c2f) then upsamples the coarse tokens to the remaining codebook levels (c1 through c8), adding the spectral detail needed for high-fidelity reconstruction. Both transformers are trained with a masked token modeling objective: during training, a variable fraction of tokens are masked according to a schedule (which can be linear, cosine, or randomly sampled), and the model learns to predict the original token values from the remaining context.
+
+At inference time, VampNet uses **iterative parallel decoding**. The generation begins with the entire token grid masked (except for any tokens provided as a prompt). In each of approximately 36 sampling passes, the model predicts all masked positions simultaneously. The predictions with the highest confidence are accepted, and the remaining positions are re-masked for the next pass. The number of tokens unmasked per pass follows a cosine schedule, so early passes establish coarse structure and later passes fill in details. This is substantially faster than autoregressive generation for equivalent sequence lengths, as each pass predicts many tokens at once.
+
+<MaskAndPredict />
+
+<p class="muted">The flexible masking interface enables several musical applications. <strong>Vamping</strong> (looping with variation) is achieved by providing a periodic prompt, keeping every N-th token as context and masking the rest. The model generates a variation that maintains the style, genre, and instrumentation of the original while introducing new musical content. <strong>Inpainting</strong> masks a contiguous time region while keeping the surrounding context, allowing the model to fill in a musically coherent bridge. <strong>Compression</strong> encodes audio as a sparse set of prompt tokens plus the masking pattern, and <strong>continuation</strong> provides the beginning of a piece and masks the rest. All of these tasks use the same model and the same inference procedure, differing only in which tokens are masked.</p>
+
+### VampNet Audio Demos
+
+Each 10-second clip is processed through four masking strategies using the same pre-trained model. The electronic loop uses **high-temperature, sparse prompts** (wild/creative), while the guitar loop uses **low-temperature, dense prompts** (faithful/polished) — same model, same strategies, different parameter regimes.
+
+#### Electronic Loop (wild: temp=1.0–1.2, sparse prompts)
+
+<div class="vampnet-demos">
+	<AudioPlayer src="/audio/vampnet_target.wav" label="Original" isTarget={true} />
+	<AudioPlayer src="/audio/vampnet_vamp.wav" label="Vamping (every 9th, t=1.2)" />
+	<AudioPlayer src="/audio/vampnet_vamp_dense.wav" label="Vamping (every 5th, t=1.0)" />
+	<AudioPlayer src="/audio/vampnet_inpaint.wav" label="Inpainting (3s–7s, t=1.0)" />
+	<AudioPlayer src="/audio/vampnet_beat.wav" label="Beat-driven (t=1.1)" />
+</div>
+
+#### Guitar Loop (faithful: temp=0.6–0.7, dense prompts)
+
+<div class="vampnet-demos">
+	<AudioPlayer src="/audio/vampnet_guitar_target.wav" label="Original" isTarget={true} />
+	<AudioPlayer src="/audio/vampnet_guitar_vamp.wav" label="Vamping (every 5th, t=0.7)" />
+	<AudioPlayer src="/audio/vampnet_guitar_vamp_dense.wav" label="Vamping (every 2nd, t=0.6)" />
+	<AudioPlayer src="/audio/vampnet_guitar_inpaint.wav" label="Inpainting (3s–7s, t=0.6)" />
+	<AudioPlayer src="/audio/vampnet_guitar_beat.wav" label="Beat-driven (t=0.7)" />
+</div>
+
+<p class="muted">Compare the two approaches: the electronic loop with high temperature and sparse prompts produces creative, sometimes surprising variations — the model is given freedom to explore. The guitar loop with low temperature and dense prompts stays much closer to the original, generating subtle variations that preserve the character of the source material. <strong>Inpainting</strong> replaces seconds 3–7 with new content that bridges the surrounding context. <strong>Beat-driven</strong> masking preserves the rhythmic skeleton and regenerates everything between beats. Both examples use the same model and inference procedure — only the mask pattern and temperature differ.</p>
+
+## Anticipatory Music Transformer
+
+The [Anticipatory Music Transformer (Thickstun et al., 2023)](https://arxiv.org/abs/2306.08620) takes a fundamentally different approach. Rather than operating on audio tokens, it models symbolic music (MIDI) as a temporal point process, treating each musical event as a tuple of (arrival time, duration, note) where the note combines pitch and instrument identity. The vocabulary contains 27,512 tokens: 10,000 quantized time values (at 10 ms resolution), 1,000 duration values, and 16,512 instrument-pitch pairs. The model is a 360M-parameter causal (GPT-style) transformer trained on the [Lakh MIDI Dataset](https://colinraffel.com/projects/lmd/), which contains 176,581 MIDI files totaling approximately 1.99 billion tokens.
+
+The central innovation is **anticipation**, best understood by comparing four approaches to conditioning. In **autoregressive** generation, the model produces events left-to-right with no control input. **Seq2seq** prepends all control tokens before events, enabling conditioning but creating long-range dependencies (a control for *t* = 15s may be hundreds of tokens away). **Sorting by time** interleaves controls with events at their actual timestamps, preserving locality but violating *stopping time* constraints, which means the model cannot determine during autoregressive sampling when to insert the next control. **Anticipation** resolves this by placing each control &delta; seconds *before* its target event. This preserves locality AND defines valid stopping times for sampling. Step through the four modes below, and drag the &delta; slider to see how the anticipation interval affects control placement.
+
+<AnticipationInterleave />
+
+<p class="muted">Training uses a 30x data augmentation strategy with four control patterns: 10% span anticipation (consecutive event spans as controls), 40% instrument anticipation (all events from one instrument as controls, simulating accompaniment), 40% random anticipation (a random 10–90% subset of events), and 10% unconditional (no controls). This mixture ensures the model can handle diverse infilling scenarios at inference time without task-specific fine-tuning. At generation time, the model uses nucleus sampling (p = 0.95) and enforces monotonic time ordering plus proper token sequencing (time &rarr; duration &rarr; note) as structural constraints.</p>
+
+Human evaluators found that generated accompaniments were comparable in musicality to human-composed passages over 20-second segments (18 wins, 31 ties, 11 losses vs. human; p = 0.194, not significantly different). This is a strong result given that the model was not fine-tuned for accompaniment specifically, but learned it as one of many infilling patterns during training. The model also matches or exceeds autoregressive baselines for unconditional prompt continuation, demonstrating that the anticipatory training objective does not degrade standard generation quality.
+
+## How They Connect
+
+These two papers, published within a month of each other in 2023, represent two poles of the music generation design space: audio-domain vs. symbolic-domain, bidirectional masking vs. causal autoregressive, and parallel decoding vs. sequential sampling. The shared thread is **controllable generation**. Both papers treat the ability to condition generation on partial musical context (a time region, a melody, a style reference) as a first-class design goal rather than an afterthought. VampNet achieves this through flexible masking patterns; AMT achieves it through anticipatory interleaving.
+
+<div class="timeline-row">
+	<svg viewBox="0 0 560 120" fill="none" xmlns="http://www.w3.org/2000/svg" class="timeline-svg">
+		<!-- Main axis line -->
+		<line x1="40" y1="46" x2="520" y2="46" stroke="#dde0e6" stroke-width="1.8"/>
+		<polygon points="520,41 532,46 520,51" fill="#dde0e6"/>
+		<!-- Theme label on the line -->
+		<text x="290" y="40" text-anchor="middle" fill="#6b7280" font-size="11" font-family="DM Mono, monospace">controllable generation</text>
+		<!-- Node 1: VampNet -->
+		<circle cx="180" cy="46" r="9" stroke="#7c4dff" stroke-width="2" fill="white"/>
+		<text x="180" y="28" text-anchor="middle" fill="#7c4dff" font-size="13" font-family="DM Mono, monospace">Jul 2023</text>
+		<text x="180" y="72" text-anchor="middle" fill="#7c4dff" font-size="14" font-family="DM Mono, monospace" font-weight="600">VampNet</text>
+		<text x="180" y="90" text-anchor="middle" fill="#6b7280" font-size="11" font-family="DM Mono, monospace">audio tokens &middot; bidirectional</text>
+		<!-- Node 2: AMT -->
+		<circle cx="420" cy="46" r="9" stroke="#2979ff" stroke-width="2" fill="white"/>
+		<text x="420" y="28" text-anchor="middle" fill="#2979ff" font-size="13" font-family="DM Mono, monospace">Jun 2023</text>
+		<text x="420" y="72" text-anchor="middle" fill="#2979ff" font-size="14" font-family="DM Mono, monospace" font-weight="600">Anticipatory Music Transformer</text>
+		<text x="420" y="90" text-anchor="middle" fill="#6b7280" font-size="11" font-family="DM Mono, monospace">MIDI tokens &middot; causal + anticipation</text>
+	</svg>
+</div>
+
+A practical consideration that distinguishes the two: VampNet produces audio directly (via DAC decoding), so the output quality is bounded by the codec's fidelity. AMT produces MIDI, which has perfect symbolic fidelity but requires a separate synthesizer to render audio, so the *sonic* quality depends entirely on the synthesis engine. We noted during the session that AMT's MIDI output rendered through a basic synthesizer has a characteristic 90s-video-game quality, while VampNet's audio output inherits the genre and production quality of its training data. Both approaches have merits, and they are in some sense complementary: symbolic models offer precise structural control, while audio models capture the nuances of timbre and production that symbolic representations discard.
+
+## Run It Yourself
+
+Two scripts are provided. `dac_experiments.py` reconstructs audio at each of the 9 codebook levels so you can hear the RVQ hierarchy. `vampnet_experiments.py` runs VampNet with four masking strategies (vamping, dense vamping, inpainting, beat-driven). Both require Python 3.9–3.11 and about 2 GB of disk space for model weights.
+
+<div class="run-box">
+
+```bash
+# Install uv (Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and set up
+git clone https://github.com/mclemcrew/music-ai-reading-group.git
+cd music-ai-reading-group/experiments/vampnet
+
+# One-time setup (installs deps, downloads ~1.5 GB of models)
+./setup.sh
+
+# DAC codec quality comparison
+uv run dac_experiments.py --input path/to/audio.wav
+
+# VampNet masking experiments (wild = creative, faithful = polished)
+uv run vampnet_experiments.py --input path/to/audio.wav --style wild
+uv run vampnet_experiments.py --input path/to/audio.wav --style faithful
+```
+
+</div>
+
+## Papers & Slides
+
+<div class="resources-grid">
+	<ResourceLink href="https://arxiv.org/abs/2307.04686" category="Paper · ISMIR 2023" categoryType="paper" label="VampNet: Music Generation via Masked Acoustic Token Modeling" host="Garcia, Seetharaman, Kumar, Pardo" />
+	<ResourceLink href="https://arxiv.org/abs/2306.08620" category="Paper · TMLR 2024" categoryType="paper" label="Anticipatory Music Transformer" host="Thickstun, Hall, Donahue, Liang" />
+	<ResourceLink href="https://arxiv.org/abs/2306.06546" category="Paper · 2023" categoryType="paper" label="High-Fidelity Audio Compression with Improved RVQGAN" host="Kumar, Seetharaman, Luebs et al." />
+	<ResourceLink href="https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C" category="Slides" categoryType="paper" label="VampNet Session Slides" host="Excalidraw" />
+	<ResourceLink href="https://link.excalidraw.com/l/8sDmlvduhSt/1IR71UHPGmr" category="Slides" categoryType="paper" label="AMT Session Slides" host="Excalidraw" />
+	<ResourceLink href="https://hugo-does-things.notion.site/VampNet-Music-Generation-via-Masked-Acoustic-Token-Modeling-e37aabd0d5f1493aa42c5711d0764b33" category="Notes" categoryType="paper" label="VampNet Reading Notes" host="Hugo Flores Garcia" />
+</div>
+
+## Demos, Tools & Datasets
+
+<div class="resources-grid">
+	<ResourceLink href="https://www.youtube.com/watch?v=3XfeWlV9Cp0" category="Video" categoryType="demo" label="VampNet Demo Video" host="youtube.com" />
+	<ResourceLink href="https://www.youtube.com/watch?v=XN4zub7nlhY" category="Video" categoryType="demo" label="AMT Demo Video" host="youtube.com" />
+	<ResourceLink href="https://crfm.stanford.edu/2023/06/16/anticipatory-music-transformer.html" category="Demo" categoryType="demo" label="Anticipatory Music Transformer Demos" host="Stanford CRFM" />
+	<ResourceLink href="https://interactiveaudiolab.github.io/project/music-audio-generation.html" category="Lab" categoryType="demo" label="Interactive Audio Lab: Music Generation" host="Northwestern" />
+	<ResourceLink href="https://www.hooktheory.com/hookpad" category="Tool" categoryType="tool" label="Hookpad (Music Theory Sketchpad)" host="hooktheory.com" />
+	<ResourceLink href="https://github.com/hugofloresgarcia/vampnet" category="Code" categoryType="tool" label="VampNet Official Repository" host="github.com/hugofloresgarcia" />
+	<ResourceLink href="https://huggingface.co/descript/descript-audio-codec" category="Model" categoryType="tool" label="Descript Audio Codec (DAC)" host="huggingface.co/descript" />
+	<ResourceLink href="https://colinraffel.com/projects/lmd/" category="Dataset" categoryType="dataset" label="Lakh MIDI Dataset (176K MIDI files)" host="Colin Raffel" />
+	<ResourceLink href="https://huggingface.co/papers/2306.08620" category="Paper" categoryType="paper" label="AMT on HuggingFace Papers" host="huggingface.co" />
+	<ResourceLink href="https://github.com/mclemcrew/music-ai-reading-group" category="Code · Examples" categoryType="tool" label="Reading Group Repo (all examples)" host="github.com/mclemcrew" />
+</div>
+
+<style>
+	.timeline-row {
+		margin: 1.5rem 0;
+		overflow-x: auto;
+	}
+
+	.timeline-svg {
+		width: 100%;
+		max-width: 560px;
+		height: auto;
+		display: block;
+	}
+
+	.vampnet-demos {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 0.75rem;
+		margin: 1rem 0 1.5rem;
+	}
+
+	@media (max-width: 640px) {
+		.timeline-svg {
+			min-width: 400px;
+		}
+	}
+</style>
