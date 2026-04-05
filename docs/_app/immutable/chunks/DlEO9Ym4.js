@@ -1,1 +1,0 @@
-import{r as e,t}from"./CohjyinX.js";export{t as default,e as metadata};
