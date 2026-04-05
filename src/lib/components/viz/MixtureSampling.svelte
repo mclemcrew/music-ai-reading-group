@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let tau = $state(0.3);
@@ -36,9 +36,9 @@
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 
-		const padX = 44;
-		const padY = 12;
-		const padBottom = 42;
+		const padX = canvasPad(w, 44);
+		const padY = canvasPad(w, 12);
+		const padBottom = canvasPad(w, 42);
 		const innerW = w - padX - 12;
 		const innerH = h - padY - padBottom;
 		const n = datasets.length;
@@ -48,7 +48,7 @@
 
 		// Y-axis label
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '12px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 12);
 		ctx.save();
 		ctx.translate(10, padY + innerH / 2);
 		ctx.rotate(-Math.PI / 2);
@@ -71,7 +71,7 @@
 			ctx.lineTo(padX + innerW, y);
 			ctx.stroke();
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '11px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 11);
 			ctx.textAlign = 'right';
 			ctx.fillText(Math.round(pct * 100) + '%', padX - 3, y + 3);
 		}
@@ -94,25 +94,25 @@
 
 			// Percentage label above bar
 			ctx.fillStyle = color;
-			ctx.font = '12px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 12);
 			ctx.textAlign = 'center';
 			ctx.fillText(Math.round(prob * 100) + '%', cx, y - 4);
 
 			// Dataset name label below
 			ctx.fillStyle = CANVAS_LABEL;
-			ctx.font = '11px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 11);
 			ctx.textAlign = 'center';
 			ctx.fillText(ds.name, cx, padY + innerH + 14);
 
 			// Hours label
 			ctx.fillStyle = ds.highResource ? 'rgba(26,158,143,0.4)' : 'rgba(224,112,32,0.4)';
-			ctx.font = '11px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 11);
 			ctx.fillText(ds.hours + 'h', cx, padY + innerH + 24);
 		});
 
 		// τ annotation
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '12px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 12);
 		ctx.textAlign = 'right';
 		ctx.fillText('τ = ' + tau.toFixed(2), w - 10, padY + 10);
 	}

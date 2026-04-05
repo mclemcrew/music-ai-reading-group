@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let stepDisplay = $state('step 0');
@@ -95,7 +95,7 @@
 		ctx.shadowBlur = 0;
 
 		// Labels
-		ctx.font = '10px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 10);
 		ctx.fillStyle = '#1a9e8f';
 		ctx.fillText('target', 8, 16);
 		ctx.fillStyle = '#e07020';

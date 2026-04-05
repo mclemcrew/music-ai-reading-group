@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, observeVisibility } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, observeVisibility, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let leftEl: HTMLCanvasElement;
 	let rightEl: HTMLCanvasElement;
@@ -33,8 +33,8 @@
 	function drawPanel(canvas: HTMLCanvasElement, showGhosts: boolean, t: number) {
 		const { ctx, w, h } = setupCanvas(canvas);
 		const nPitches = 8;
-		const padX = 38;
-		const padY = 10;
+		const padX = canvasPad(w, 38);
+		const padY = canvasPad(w, 10);
 		const innerW = w - padX - 8;
 		const innerH = h - padY * 2;
 		const rowH = innerH / nPitches;
@@ -45,7 +45,7 @@
 		ctx.lineJoin = 'round';
 
 		// Pitch labels on the left
-		ctx.font = '11px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 11);
 		ctx.textAlign = 'right';
 		ctx.textBaseline = 'middle';
 		for (let p = 0; p < nPitches; p++) {
@@ -100,7 +100,7 @@
 		});
 
 		// Panel label
-		ctx.font = '12px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 12);
 		ctx.textAlign = 'left';
 		ctx.textBaseline = 'alphabetic';
 		if (showGhosts) {

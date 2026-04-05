@@ -5,17 +5,24 @@
 	let container: HTMLElement;
 
 	onMount(() => {
+		const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		const obs = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((entry) => {
 					if (!entry.isIntersecting) return;
-					animate(container.querySelectorAll('rect, circle'), {
-						opacity: [0, 1],
-						scale: [0.9, 1],
-						delay: stagger(80),
-						duration: 600,
-						ease: 'outExpo'
-					});
+					if (reducedMotion) {
+						container.querySelectorAll('rect, circle').forEach((el) => {
+							(el as SVGElement).style.opacity = '1';
+						});
+					} else {
+						animate(container.querySelectorAll('rect, circle'), {
+							opacity: [0, 1],
+							scale: [0.9, 1],
+							delay: stagger(80),
+							duration: 600,
+							ease: 'outExpo'
+						});
+					}
 					obs.unobserve(entry.target);
 				});
 			},
@@ -86,7 +93,6 @@
 
 	svg {
 		width: 100%;
-		min-width: 500px;
 		height: auto;
 		font-family: var(--font-mono);
 	}

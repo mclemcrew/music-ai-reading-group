@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, observeVisibility } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, canvasFont, canvasPad, observeVisibility } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let container: HTMLElement;
@@ -48,6 +48,8 @@
 		return a + (b - a) * t;
 	}
 
+	let _canvasW = 900;
+
 	function setMode(m: Mode) {
 		mode = m;
 	}
@@ -77,7 +79,7 @@
 
 		// Label
 		ctx.fillStyle = color;
-		ctx.font = '11px "DM Mono", monospace';
+		ctx.font = canvasFont(_canvasW, 11);
 		ctx.textAlign = 'center';
 		ctx.fillText(label, x, y + h / 2 + 4);
 		ctx.globalAlpha = 1;
@@ -86,15 +88,16 @@
 	function draw() {
 		if (!canvas) return;
 		const { ctx, w, h } = setupCanvas(canvas);
+		_canvasW = w;
 		ctx.fillStyle = CANVAS_BG;
 		ctx.fillRect(0, 0, w, h);
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 
-		const padL = 14;
-		const padR = 14;
-		const padT = 14;
-		const padB = 28;
+		const padL = canvasPad(w, 14);
+		const padR = canvasPad(w, 14);
+		const padT = canvasPad(w, 14);
+		const padB = canvasPad(w, 28);
 		const timelineY = padT + (h - padT - padB) / 2;
 		const plotL = padL;
 		const plotR = w - padR;
@@ -125,7 +128,7 @@
 
 		// Time ticks
 		ctx.fillStyle = '#6b7280';
-		ctx.font = '10px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 10);
 		ctx.textAlign = 'center';
 		for (let s = 0; s <= TOTAL_TIME; s += 5) {
 			const x = timeToX(s);
@@ -223,7 +226,7 @@
 
 			// Label below everything
 			ctx.fillStyle = '#4b5563';
-			ctx.font = '13px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 13);
 			ctx.textAlign = 'center';
 			ctx.globalAlpha = wS2S * 0.85;
 			ctx.fillText('long-range dependency', (lastCtrlX + firstEvtX) / 2, labelY + 6);
@@ -234,7 +237,7 @@
 		if (wSort > 0.3) {
 			ctx.globalAlpha = Math.min(1, (wSort - 0.3) / 0.4) * 0.85;
 			ctx.fillStyle = '#e07020';
-			ctx.font = '13px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 13);
 			ctx.textAlign = 'center';
 			ctx.fillText('not a stopping time \u2014 can\'t sample autoregressively', plotL + plotW / 2, controlBaseY - 8);
 			ctx.globalAlpha = 1;
@@ -259,7 +262,7 @@
 			ctx.stroke();
 
 			ctx.fillStyle = '#2979ff';
-			ctx.font = '13px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 13);
 			ctx.textAlign = 'center';
 			ctx.fillText(`\u03B4 = ${delta}s`, (antX + targetX) / 2, bracketY - 6);
 			ctx.globalAlpha = 1;
@@ -269,14 +272,14 @@
 		if (wAR > 0.3) {
 			ctx.globalAlpha = Math.min(1, (wAR - 0.3) / 0.4) * 0.7;
 			ctx.fillStyle = '#4b5563';
-			ctx.font = '13px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 13);
 			ctx.textAlign = 'center';
 			ctx.fillText('no controls \u2014 unconditional generation', plotL + plotW / 2, controlBaseY + tokH / 2 + 5);
 			ctx.globalAlpha = 1;
 		}
 
 		// === Legend ===
-		ctx.font = '11px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 11);
 		ctx.textAlign = 'left';
 		ctx.fillStyle = '#e07020';
 		ctx.globalAlpha = Math.max(0.3, controlAlpha);

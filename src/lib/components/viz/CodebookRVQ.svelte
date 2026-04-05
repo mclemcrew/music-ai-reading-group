@@ -3,7 +3,7 @@
 	import { base } from '$app/paths';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, observeVisibility } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, CANVAS_LABEL, observeVisibility, canvasFont, canvasPad } from '$lib/utils/canvas';
 
 	let canvas: HTMLCanvasElement;
 	let container: HTMLElement;
@@ -120,10 +120,10 @@
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
 
-		const padL = 10;
-		const padR = 10;
-		const padT = 8;
-		const padB = 24;
+		const padL = canvasPad(w, 10);
+		const padR = canvasPad(w, 10);
+		const padT = canvasPad(w, 8);
+		const padB = canvasPad(w, 24);
 
 		// === Layout regions ===
 		const waveW = 70;
@@ -151,7 +151,7 @@
 
 		// Label
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '10px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 10);
 		ctx.textAlign = 'center';
 		ctx.fillText('input', wCx, h - 6);
 
@@ -182,7 +182,7 @@
 			const color = tierColor(r);
 
 			ctx.fillStyle = lerpColor('#d1d5db', color, activation);
-			ctx.font = '9px "DM Mono", monospace';
+			ctx.font = canvasFont(w, 9);
 			ctx.textAlign = 'right';
 			ctx.fillText(`c${r}`, gridL - 4, y + rowH / 2 + 3);
 
@@ -232,7 +232,7 @@
 				if (plusAlpha > 0.05) {
 					ctx.globalAlpha = plusAlpha;
 					ctx.fillStyle = CANVAS_LABEL;
-					ctx.font = '10px "DM Mono", monospace';
+					ctx.font = canvasFont(w, 10);
 					ctx.textAlign = 'center';
 					ctx.fillText('+', gridL + gridW + 8, y + rowH + 2);
 					ctx.globalAlpha = 1;
@@ -276,14 +276,14 @@
 
 		// Label
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '10px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 10);
 		ctx.textAlign = 'center';
 		ctx.fillText('output', rCx, h - 6);
 
 		// Level count label
 		const displayLevels = Math.round(currentLevels);
 		ctx.fillStyle = tierColor(Math.min(displayLevels - 1, 8));
-		ctx.font = '11px "DM Mono", monospace';
+		ctx.font = canvasFont(w, 11);
 		ctx.textAlign = 'center';
 		ctx.fillText(`${displayLevels} / ${NUM_CODEBOOKS} codebooks`, gridL + gridW / 2, h - 6);
 	}

@@ -40,6 +40,8 @@
 		border-radius: 12px;
 		overflow: hidden;
 		margin: 1.5rem 0;
+		container-type: inline-size;
+		container-name: viz;
 	}
 
 	.viz-header {
@@ -83,12 +85,24 @@
 		font-family: var(--font-mono);
 	}
 
+	@container viz (max-width: 500px) {
+		.viz-header {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+		.viz-controls {
+			width: 100%;
+		}
+	}
+
 	@media (max-width: 640px) {
 		.viz-header {
 			padding: 0.75rem 1rem;
 		}
 		.viz-caption {
 			padding: 0.6rem 1rem;
+			font-size: 0.75rem;
+			line-height: 1.5;
 		}
 	}
 </style>

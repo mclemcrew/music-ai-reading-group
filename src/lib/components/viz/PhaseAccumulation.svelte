@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import VizPanel from '$lib/components/ui/VizPanel.svelte';
 	import VizButton from '$lib/components/ui/VizButton.svelte';
-	import { setupCanvas, CANVAS_BG, CANVAS_GRID, observeVisibility } from '$lib/utils/canvas';
+	import { setupCanvas, CANVAS_BG, CANVAS_GRID, canvasFont, canvasPad, observeVisibility } from '$lib/utils/canvas';
 
 	let naiveEl: HTMLCanvasElement;
 	let accumEl: HTMLCanvasElement;
