@@ -10,7 +10,6 @@ set -euo pipefail
 #
 # Usage:
 #   ./run-demo-live.sh
-#   ./run-demo-live.sh "Your MIDI Port Name"   # override MIDI input port
 #
 # Controls:
 #   Enter          -> AI takes over (generates continuation)
@@ -19,16 +18,20 @@ set -euo pipefail
 #   Ctrl+C         -> Quit
 # ============================================================================
 
-# --- Configuration (edit these after running list-midi-ports.py) ------------
-
-MIDI_IN="${1:-USB MIDI Keyboard}"     # Your USB MIDI controller port name
-MIDI_OUT="IAC Driver Bus 1"          # Where AI output goes (-> Ableton / FluidSynth)
-MIDI_THROUGH="IAC Driver Bus 1"      # Echo your playing through audio engine too
-
 # --- Paths ------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ARIA_DIR="/Users/mclemens/Development/aria"
+
+# --- Load config -------------------------------------------------------------
+
+if [ ! -f "${SCRIPT_DIR}/config.sh" ]; then
+    echo "Error: config.sh not found."
+    echo "  cp config.example.sh config.sh   # then edit ARIA_DIR"
+    exit 1
+fi
+source "${SCRIPT_DIR}/config.sh"
+
+ARIA_DIR="${ARIA_DIR:?Set ARIA_DIR in config.sh}"
 CHECKPOINT="${SCRIPT_DIR}/checkpoints/model-demo.safetensors"
 HARDWARE="${SCRIPT_DIR}/hardware/software-routing.json"
 SAVE_DIR="${SCRIPT_DIR}/recordings"
@@ -46,6 +49,13 @@ fi
 
 source "${SCRIPT_DIR}/.venv/bin/activate"
 
+# --- Pick MIDI ports (interactive if not preset in config.sh) ----------------
+
+PICK="${SCRIPT_DIR}/pick-midi-port.py"
+MIDI_OUT=$(python "${PICK}" output "${MIDI_OUT:-}")
+MIDI_THROUGH=$(python "${PICK}" output "${MIDI_THROUGH:-}")
+MIDI_IN=$(python "${PICK}" input "${MIDI_IN:-}")
+
 echo ""
 echo "============================================"
 echo "  Aria-Duet: Live MIDI Keyboard Demo"
@@ -54,6 +64,7 @@ echo ""
 echo "  Checkpoint:  $(basename "${CHECKPOINT}")"
 echo "  MIDI In:     ${MIDI_IN}"
 echo "  MIDI Out:    ${MIDI_OUT}"
+echo "  MIDI Through: ${MIDI_THROUGH}"
 echo "  Recording:   $(basename "${SAVE_PATH}")"
 echo ""
 echo "  Controls:"
@@ -63,7 +74,6 @@ echo "    Enter again  -> Your turn to play"
 echo "    Type + Enter -> Reset context"
 echo "    Ctrl+C       -> Quit"
 echo ""
-echo "  Tip: Run 'python list-midi-ports.py' to find your exact port name."
 echo "  Loading model (first run compiles MLX kernels, ~30-60s)..."
 echo ""
 
@@ -74,6 +84,7 @@ python "${ARIA_DIR}/demo/demo_mlx.py" \
     --midi_through "${MIDI_THROUGH}" \
     --hardware "${HARDWARE}" \
     --back_and_forth \
-    --temp 0.85 \
-    --min_p 0.05 \
-    --save_path "${SAVE_PATH}"
+    --temp 0.95 \
+    --top_p 0.95 \
+    --save_path "${SAVE_PATH}" \
+    ${PENALTIES:+--penalties}

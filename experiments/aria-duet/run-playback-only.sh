@@ -18,14 +18,20 @@ set -euo pipefail
 #   3. Port name below matches (run: python list-midi-ports.py)
 # ============================================================================
 
-# --- Configuration ----------------------------------------------------------
-
-MIDI_OUT="IAC Driver Bus 1"
-
 # --- Paths ------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ARIA_DIR="/Users/mclemens/Development/aria"
+
+# --- Load config -------------------------------------------------------------
+
+if [ ! -f "${SCRIPT_DIR}/config.sh" ]; then
+    echo "Error: config.sh not found."
+    echo "  cp config.example.sh config.sh   # then edit ARIA_DIR"
+    exit 1
+fi
+source "${SCRIPT_DIR}/config.sh"
+
+ARIA_DIR="${ARIA_DIR:?Set ARIA_DIR in config.sh}"
 CHECKPOINT="${SCRIPT_DIR}/checkpoints/model-demo.safetensors"
 MIDI_FILE="${1:-${ARIA_DIR}/example-prompts/waltz.mid}"
 
@@ -45,6 +51,11 @@ fi
 # --- Run --------------------------------------------------------------------
 
 source "${SCRIPT_DIR}/.venv/bin/activate"
+
+# --- Pick MIDI port (interactive if not preset in config.sh) -----------------
+
+PICK="${SCRIPT_DIR}/pick-midi-port.py"
+MIDI_OUT=$(python "${PICK}" output "${MIDI_OUT:-}")
 
 echo ""
 echo "============================================"

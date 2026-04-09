@@ -12,5 +12,8 @@ soundfonts/*.sf2
 # Demo session recordings
 recordings/*.mid
 
+# Local configuration (personal paths / port names)
+config.sh
+
 # Logs
 demo.log

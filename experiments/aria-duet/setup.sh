@@ -17,7 +17,18 @@ set -euo pipefail
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ARIA_DIR="/Users/mclemens/Development/aria"
+
+# --- Load or create config ---------------------------------------------------
+
+if [ ! -f "${SCRIPT_DIR}/config.sh" ]; then
+    echo "No config.sh found. Creating from config.example.sh..."
+    cp "${SCRIPT_DIR}/config.example.sh" "${SCRIPT_DIR}/config.sh"
+    echo "  Created config.sh — please edit ARIA_DIR if needed."
+    echo ""
+fi
+source "${SCRIPT_DIR}/config.sh"
+
+ARIA_DIR="${ARIA_DIR:?Set ARIA_DIR in config.sh}"
 CHECKPOINT_DIR="${SCRIPT_DIR}/checkpoints"
 CHECKPOINT_FILE="${CHECKPOINT_DIR}/model-demo.safetensors"
 CHECKPOINT_URL="https://huggingface.co/loubb/aria-medium-base/resolve/main/model-demo.safetensors?download=true"
