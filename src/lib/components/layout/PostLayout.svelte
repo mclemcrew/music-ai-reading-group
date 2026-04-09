@@ -167,14 +167,6 @@
 		line-height: 1.65;
 	}
 
-	/* Constrain prose to comfortable reading measure, but let
-	   visualizations, grids, and run boxes use full container width */
-	.post-content :global(p),
-	.post-content :global(ul),
-	.post-content :global(ol) {
-		max-width: 65ch;
-	}
-
 	.post-content :global(section) {
 		margin-bottom: 2.5rem;
 	}

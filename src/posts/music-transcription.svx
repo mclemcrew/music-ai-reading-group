@@ -242,25 +242,35 @@ The stacked input feeds into a lightweight 3-head CNN. Each head solves one sub-
 These three papers represent three distinct design philosophies applied to the same problem. Onsets and Frames encodes domain knowledge directly as architecture, hard-coding the insight that onsets and frames need different detectors; the gating rule is an explicit algorithmic choice, not a learned one. MT3 takes the opposite position: given enough data and a sufficiently general model (T5), the relevant structure will emerge from training, and the dual-objective insight appears implicitly in the attention weights without being specified. NMP's position is more nuanced, encoding harmonic structure in the *input representation* (harmonic stacking) rather than in the architecture, keeping the network itself simple enough to fit in 16K parameters.
 
 <div class="timeline-row">
-	<svg viewBox="0 0 560 52" fill="none" xmlns="http://www.w3.org/2000/svg" class="timeline-svg">
+	<svg viewBox="0 0 560 140" fill="none" xmlns="http://www.w3.org/2000/svg" class="timeline-svg">
 		<!-- Main axis line -->
-		<line x1="40" y1="26" x2="520" y2="26" stroke="#dde0e6" stroke-width="1.5"/>
-		<polygon points="520,22 530,26 520,30" fill="#dde0e6"/>
-		<!-- Node 1: O&F 2017 -->
-		<circle cx="100" cy="26" r="7" stroke="#1a9e8f" stroke-width="1.5" fill="white"/>
-		<text x="100" y="15" text-anchor="middle" fill="#1a9e8f" font-size="9" font-family="DM Mono, monospace">2017</text>
-		<text x="100" y="44" text-anchor="middle" fill="#1a9e8f" font-size="8" font-family="DM Mono, monospace">Onsets &amp; Frames</text>
-		<!-- Node 2: MT3 2021 -->
-		<circle cx="290" cy="26" r="7" stroke="#2979ff" stroke-width="1.5" fill="white"/>
-		<text x="290" y="15" text-anchor="middle" fill="#2979ff" font-size="9" font-family="DM Mono, monospace">2021</text>
-		<text x="290" y="44" text-anchor="middle" fill="#2979ff" font-size="8" font-family="DM Mono, monospace">MT3</text>
-		<!-- Node 3: NMP 2022 -->
-		<circle cx="440" cy="26" r="7" stroke="#e07020" stroke-width="1.5" fill="white"/>
-		<text x="440" y="15" text-anchor="middle" fill="#e07020" font-size="9" font-family="DM Mono, monospace">2022</text>
-		<text x="440" y="44" text-anchor="middle" fill="#e07020" font-size="8" font-family="DM Mono, monospace">NMP / Lightweight</text>
+		<line x1="40" y1="70" x2="520" y2="70" stroke="#dde0e6" stroke-width="2"/>
+		<polygon points="520,64 534,70 520,76" fill="#dde0e6"/>
+		<!-- Tick marks at nodes -->
+		<line x1="100" y1="66" x2="100" y2="74" stroke="#dde0e6" stroke-width="1.2"/>
+		<line x1="290" y1="66" x2="290" y2="74" stroke="#dde0e6" stroke-width="1.2"/>
+		<line x1="440" y1="66" x2="440" y2="74" stroke="#dde0e6" stroke-width="1.2"/>
 		<!-- Theme labels on the line -->
-		<text x="194" y="23" text-anchor="middle" fill="#9ca3af" font-size="7" font-family="DM Mono, monospace">architecture → sequence</text>
-		<text x="362" y="23" text-anchor="middle" fill="#9ca3af" font-size="7" font-family="DM Mono, monospace">accuracy → efficiency</text>
+		<text x="194" y="62" text-anchor="middle" fill="#9ca3af" font-size="10" font-family="DM Mono, monospace">architecture → sequence</text>
+		<text x="362" y="62" text-anchor="middle" fill="#9ca3af" font-size="10" font-family="DM Mono, monospace">accuracy → efficiency</text>
+		<!-- Node 1: O&F 2017 -->
+		<circle cx="100" cy="70" r="11" stroke="#1a9e8f" stroke-width="2" fill="white"/>
+		<circle cx="100" cy="70" r="3.5" fill="#1a9e8f"/>
+		<text x="100" y="34" text-anchor="middle" fill="#1a9e8f" font-size="13" font-family="DM Mono, monospace" font-weight="600">2017</text>
+		<text x="100" y="102" text-anchor="middle" fill="#1a9e8f" font-size="11" font-family="DM Mono, monospace" font-weight="500">Onsets &amp; Frames</text>
+		<text x="100" y="118" text-anchor="middle" fill="#9ca3af" font-size="9" font-family="DM Mono, monospace">dual-objective CNN</text>
+		<!-- Node 2: MT3 2021 -->
+		<circle cx="290" cy="70" r="11" stroke="#2979ff" stroke-width="2" fill="white"/>
+		<circle cx="290" cy="70" r="3.5" fill="#2979ff"/>
+		<text x="290" y="34" text-anchor="middle" fill="#2979ff" font-size="13" font-family="DM Mono, monospace" font-weight="600">2021</text>
+		<text x="290" y="102" text-anchor="middle" fill="#2979ff" font-size="11" font-family="DM Mono, monospace" font-weight="500">MT3</text>
+		<text x="290" y="118" text-anchor="middle" fill="#9ca3af" font-size="9" font-family="DM Mono, monospace">seq2seq transformer</text>
+		<!-- Node 3: NMP 2022 -->
+		<circle cx="440" cy="70" r="11" stroke="#e07020" stroke-width="2" fill="white"/>
+		<circle cx="440" cy="70" r="3.5" fill="#e07020"/>
+		<text x="440" y="34" text-anchor="middle" fill="#e07020" font-size="13" font-family="DM Mono, monospace" font-weight="600">2022</text>
+		<text x="440" y="102" text-anchor="middle" fill="#e07020" font-size="11" font-family="DM Mono, monospace" font-weight="500">NMP / Lightweight</text>
+		<text x="440" y="118" text-anchor="middle" fill="#9ca3af" font-size="9" font-family="DM Mono, monospace">16K params · harmonic stacking</text>
 	</svg>
 </div>
 
@@ -367,10 +377,8 @@ Target: three simultaneous notes. This is the most challenging case, since G4's 
 
 	.arch-svg {
 		width: 100%;
-		max-width: 720px;
 		height: auto;
 		display: block;
-		margin: 0 auto;
 	}
 
 	.timeline-row {
@@ -380,8 +388,7 @@ Target: three simultaneous notes. This is the most challenging case, since G4's 
 
 	.timeline-svg {
 		width: 100%;
-		max-width: 560px;
-		height: 52px;
+		height: auto;
 		display: block;
 	}
 

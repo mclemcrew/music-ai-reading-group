@@ -122,21 +122,21 @@
 			// Show everything immediately, skip entrance animations
 			bars.forEach((bar) => { bar.style.opacity = '0.55'; bar.style.transform = 'scaleY(0.5)'; });
 		} else {
-			// Entrance: bars grow up from nothing, left to right
+			// Hero text entrance — starts immediately so it's the first thing visible
+			animate(heroRef.querySelectorAll('.hero-text > *'), {
+				translateY: [20, 0],
+				opacity: [0, 1],
+				delay: stagger(60),
+				duration: 500,
+				ease: 'outExpo'
+			});
+
+			// Bars entrance — starts after hero text begins
 			animate(bars, {
 				scaleY: [0, 1],
 				opacity: [0, 0.65],
 				duration: 550,
-				delay: stagger(18, { start: 150 }),
-				ease: 'outExpo'
-			});
-
-			// Hero text entrance
-			animate(heroRef.querySelectorAll('.hero-text > *'), {
-				translateY: [30, 0],
-				opacity: [0, 1],
-				delay: stagger(80, { start: 200 }),
-				duration: 700,
+				delay: stagger(18, { start: 200 }),
 				ease: 'outExpo'
 			});
 		}
@@ -347,6 +347,54 @@
 			</div>
 		{/each}
 	</div>
+</section>
+
+<!-- ═══ PAPER CONSTELLATION CARD ═══ -->
+<section class="constellation-cta container">
+	<a href="{base}/papers" class="constellation-card">
+		<div class="constellation-preview" aria-hidden="true">
+			<svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
+				<!-- Mini version of the constellation: 3 cluster centers with a few orbiting nodes -->
+				<!-- Signal processing cluster (top) -->
+				<circle cx="100" cy="40" r="30" fill="none" stroke="var(--orange)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35"/>
+				<line x1="100" y1="40" x2="88" y2="25" stroke="var(--orange)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+				<line x1="100" y1="40" x2="115" y2="28" stroke="var(--orange)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+				<circle cx="88" cy="25" r="4" fill="white" stroke="var(--orange)" stroke-width="1.5"/>
+				<circle cx="115" cy="28" r="4" fill="white" stroke="var(--orange)" stroke-width="1.5"/>
+				<!-- Transcription cluster (bottom left) -->
+				<circle cx="55" cy="95" r="30" fill="none" stroke="var(--teal)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35"/>
+				<line x1="55" y1="95" x2="42" y2="82" stroke="var(--teal)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+				<line x1="55" y1="95" x2="68" y2="85" stroke="var(--teal)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+				<line x1="55" y1="95" x2="45" y2="108" stroke="var(--teal)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+				<circle cx="42" cy="82" r="4" fill="white" stroke="var(--teal)" stroke-width="1.5"/>
+				<circle cx="68" cy="85" r="4" fill="white" stroke="var(--teal)" stroke-width="1.5"/>
+				<circle cx="45" cy="108" r="4" fill="white" stroke="var(--teal)" stroke-width="1.5"/>
+				<!-- Generation cluster (bottom right) -->
+				<circle cx="145" cy="95" r="30" fill="none" stroke="var(--violet)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35"/>
+				<line x1="145" y1="95" x2="135" y2="82" stroke="var(--violet)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+				<line x1="145" y1="95" x2="158" y2="85" stroke="var(--violet)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+				<circle cx="135" cy="82" r="4" fill="white" stroke="var(--violet)" stroke-width="1.5"/>
+				<circle cx="158" cy="85" r="4" fill="white" stroke="var(--violet)" stroke-width="1.5"/>
+				<!-- Cross-cluster hint line -->
+				<line x1="115" y1="28" x2="68" y2="85" stroke="var(--text-muted)" stroke-width="0.5" opacity="0.3"/>
+				<line x1="135" y1="82" x2="68" y2="85" stroke="var(--text-muted)" stroke-width="0.5" opacity="0.3"/>
+			</svg>
+		</div>
+		<div class="constellation-text">
+			<span class="constellation-kicker">New</span>
+			<h2>Paper Constellation</h2>
+			<p>
+				Every paper we've read, mapped by theme. Walk through each cluster, then tap any node to
+				see why we picked it.
+			</p>
+			<span class="constellation-cta-link">
+				Explore the map
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+				</svg>
+			</span>
+		</div>
+	</a>
 </section>
 
 <!-- ═══ PUBLISHED NOTES ═══ -->
@@ -857,6 +905,119 @@
 		border-color: var(--orange);
 	}
 
+	/* ── Constellation CTA ── */
+	.constellation-cta {
+		padding-top: 0;
+		padding-bottom: 0;
+		margin-top: -1.5rem;
+	}
+
+	.constellation-card {
+		display: grid;
+		grid-template-columns: 200px 1fr;
+		gap: 1.75rem;
+		align-items: center;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		padding: 1.75rem 2rem;
+		text-decoration: none;
+		color: var(--text);
+		transition: all 0.2s ease;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.constellation-card::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(135deg, var(--orange-glow) 0%, transparent 40%, var(--teal-glow) 70%, var(--violet-glow) 100%);
+		opacity: 0.4;
+		pointer-events: none;
+	}
+
+	.constellation-card:hover,
+	.constellation-card:active {
+		border-color: var(--orange);
+		transform: translateY(-2px);
+		box-shadow: 0 6px 28px rgba(0, 0, 0, 0.06);
+		text-decoration: none;
+	}
+
+	.constellation-preview {
+		position: relative;
+		z-index: 1;
+	}
+
+	.constellation-preview svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.constellation-text {
+		position: relative;
+		z-index: 1;
+	}
+
+	.constellation-kicker {
+		display: inline-block;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--orange);
+		background: var(--orange-glow);
+		border: 1px solid rgba(224, 112, 32, 0.25);
+		padding: 0.2rem 0.65rem;
+		border-radius: 12px;
+		margin-bottom: 0.6rem;
+	}
+
+	.constellation-text h2 {
+		font-family: var(--font-display);
+		font-size: 1.4rem;
+		font-weight: 700;
+		color: var(--text);
+		margin: 0 0 0.4rem;
+	}
+
+	.constellation-text p {
+		font-size: 0.92rem;
+		color: var(--text-muted);
+		line-height: 1.55;
+		margin: 0 0 0.9rem;
+	}
+
+	.constellation-cta-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		color: var(--orange);
+		font-weight: 500;
+	}
+
+	@media (max-width: 640px) {
+		.constellation-card {
+			grid-template-columns: 1fr;
+			gap: 1rem;
+			padding: 1.25rem 1.25rem 1.5rem;
+		}
+		.constellation-preview svg {
+			max-width: 220px;
+			margin: 0 auto;
+		}
+		.constellation-text {
+			text-align: center;
+		}
+		.constellation-cta-link {
+			justify-content: center;
+		}
+	}
+
 	/* ── Posts ── */
 	.posts-grid {
 		display: grid;
@@ -1040,6 +1201,29 @@
 
 		.topic-badge {
 			margin-left: 0;
+		}
+	}
+
+	/* Hide animated elements initially so there's no flash
+	   before JS entrance animations run */
+	.hero-text > :global(*) {
+		opacity: 0;
+	}
+
+	.session-card {
+		opacity: 0;
+	}
+
+	.post-card {
+		opacity: 0;
+	}
+
+	/* If user prefers reduced motion, show everything immediately */
+	@media (prefers-reduced-motion: reduce) {
+		.hero-text > :global(*),
+		.session-card,
+		.post-card {
+			opacity: 1 !important;
 		}
 	}
 </style>

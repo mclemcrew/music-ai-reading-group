@@ -1,0 +1,282 @@
+---
+title: "Real-Time Human-AI Music"
+subtitle: "Eliminating and masking the two-second latency wall"
+date: "2026-04-08"
+authors: ["Music AI Reading Group"]
+tags: ["real-time", "human-ai", "interaction", "latency", "piano", "reinforcement-learning"]
+description: "We examine two 2025 papers that each address the same problem, the approximately two-second latency wall that blocks real-time human-AI musical collaboration, through distinct strategies. Ghost in the Keys eliminates the bottleneck at the inference level via continuous KV-cache prefill on a Yamaha Disklavier. ReaLJam masks it through probabilistic foresight, a commitment protocol, and a waterfall display."
+published: true
+badge: "music-ai-reading-group"
+---
+
+<script>
+	import LatencyTimeline from '$lib/components/viz/LatencyTimeline.svelte';
+	import AnticipateLookahead from '$lib/components/viz/AnticipateLookahead.svelte';
+	import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
+</script>
+
+## The Two-Second Problem
+
+The experience of playing piano alongside a partner who responds two seconds late is, for most musicians, not simply frustrating but categorically different from musical collaboration. Every phrase hangs unacknowledged; every stylistic cue arrives too late to inform a response. The musical conversation, in Csikszentmihalyi's (1990) sense of an activity sustained by immediate feedback loops, ceases to exist. We posit that this is the central obstacle facing real-time AI music collaboration as of early 2025.
+
+The bottleneck is structural. Autoregressive transformer models maintain a *key-value (KV) cache* that stores all prior context for efficient generation. This cache must be computed from scratch each time the model is invoked, an O(N² · d) operation over context length N and model dimension d. For a pianist who has played 30 to 60 seconds of MIDI, this computation requires 1 to 2 seconds before the first output note can be generated, a delay that falls well outside the sub-150ms window within which acoustic feedback is perceived as continuous with the action that caused it.
+
+This session examines two 2025 papers that each address this problem through distinct strategies.
+
+<div class="concepts">
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Flow state arc -->
+				<path d="M10 60 Q30 10 50 8 Q70 6 90 20" stroke="#1a9e8f" stroke-width="1.5" opacity="0.6"/>
+				<!-- Break point marker -->
+				<line x1="50" y1="4" x2="50" y2="68" stroke="#e03131" stroke-width="1" stroke-dasharray="3 2" opacity="0.5"/>
+				<circle cx="50" cy="8" r="3" stroke="#e03131" stroke-width="1.2" fill="none" opacity="0.8"/>
+				<!-- Time axis -->
+				<line x1="8" y1="64" x2="92" y2="64" stroke="#dde0e6" stroke-width="0.8"/>
+				<!-- Labels -->
+				<text x="12" y="70" fill="#1a9e8f" font-size="6.5" font-family="DM Mono, monospace" opacity="0.7">flow</text>
+				<text x="53" y="70" fill="#e03131" font-size="6.5" font-family="DM Mono, monospace" opacity="0.7">2s gap</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--teal)">Flow State</h4>
+			<p>Csikszentmihalyi's concept of optimal engaged activity requires immediate feedback. Musical performance depends on sub-150ms response loops, the time window within which acoustic feedback is perceived as continuous with the action that caused it. A two-second gap does not merely slow the interaction; it terminates the conditions under which flow can be maintained.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Two people at piano -->
+				<circle cx="25" cy="22" r="8" stroke="#1a9e8f" stroke-width="1.2"/>
+				<path d="M15 38 Q25 32 35 38" stroke="#1a9e8f" stroke-width="1.2"/>
+				<circle cx="75" cy="22" r="8" stroke="#e07020" stroke-width="1.2"/>
+				<path d="M65 38 Q75 32 85 38" stroke="#e07020" stroke-width="1.2"/>
+				<!-- Piano keys between them -->
+				<rect x="38" y="42" width="24" height="18" rx="1" stroke="#dde0e6" stroke-width="0.8"/>
+				<line x1="42" y1="42" x2="42" y2="60" stroke="#dde0e6" stroke-width="0.6"/>
+				<line x1="46" y1="42" x2="46" y2="60" stroke="#dde0e6" stroke-width="0.6"/>
+				<line x1="50" y1="42" x2="50" y2="60" stroke="#dde0e6" stroke-width="0.6"/>
+				<line x1="54" y1="42" x2="54" y2="60" stroke="#dde0e6" stroke-width="0.6"/>
+				<line x1="58" y1="42" x2="58" y2="60" stroke="#dde0e6" stroke-width="0.6"/>
+				<!-- Arrow exchange -->
+				<path d="M34 28 L42 34" stroke="#1a9e8f" stroke-width="1" marker-end="url(#arr)"/>
+				<path d="M58 34 L66 28" stroke="#e07020" stroke-width="1"/>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--orange)">Musicking</h4>
+			<p>Christopher Small (1998) argued that music is not a noun but a verb, an embodied, social activity of mutual response. Text-based AI music tools are asynchronous by construction: the user describes a desired output, waits, and receives a result. Both Aria-Duet and ReaLJam reject this model. They restore what Small calls *musicking*, in which the human acts, the AI responds, and the exchange itself constitutes the music.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- KV cache block diagram -->
+				<rect x="8" y="20" width="36" height="32" rx="2" stroke="#e07020" stroke-width="1.2"/>
+				<text x="26" y="32" text-anchor="middle" fill="#e07020" font-size="6" font-family="DM Mono, monospace">KV</text>
+				<text x="26" y="44" text-anchor="middle" fill="#e07020" font-size="6" font-family="DM Mono, monospace">cache</text>
+				<!-- Chunk arrows -->
+				<path d="M44 28 L54 28" stroke="#FF9500" stroke-width="1.2"/>
+				<text x="59" y="22" fill="#FF9500" font-size="6" font-family="DM Mono, monospace">c1</text>
+				<rect x="54" y="18" width="12" height="12" rx="1" stroke="#FF9500" stroke-width="1" opacity="0.8"/>
+				<text x="59" y="38" fill="#FF9500" font-size="6" font-family="DM Mono, monospace">c2</text>
+				<rect x="54" y="30" width="12" height="12" rx="1" stroke="#FF9500" stroke-width="1" opacity="0.6"/>
+				<text x="59" y="54" fill="#FF9500" font-size="6" font-family="DM Mono, monospace">c3</text>
+				<rect x="54" y="42" width="12" height="12" rx="1" stroke="#FF9500" stroke-width="1" opacity="0.4"/>
+				<!-- Time arrow -->
+				<path d="M8 58 L92 58" stroke="#dde0e6" stroke-width="0.8"/>
+				<polygon points="90,55 95,58 90,61" fill="#dde0e6" opacity="0.8"/>
+				<text x="8" y="68" fill="#e07020" font-size="6.5" font-family="DM Mono, monospace" opacity="0.6">prefill while playing</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--orange)">Continuous Prefill</h4>
+			<p>The salient engineering contribution of Aria-Duet is a *continuous prefill* strategy: rather than computing the full KV cache in one operation at handover time, the system divides the growing context into chunks and fills the cache incrementally while the human is still playing. By the time the pedal is pressed, the cache is already warm, reducing the perceived gap from approximately 1.8 seconds to roughly 150ms of speculative re-evaluation.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Waterfall bars -->
+				<rect x="12" y="8" width="18" height="10" rx="1" stroke="#9B59B6" stroke-width="1" opacity="0.4"/>
+				<text x="21" y="16" text-anchor="middle" fill="#9B59B6" font-size="5.5" font-family="DM Mono, monospace" opacity="0.6">Em7</text>
+				<rect x="12" y="22" width="18" height="10" rx="1" stroke="#3498DB" stroke-width="1" opacity="0.7"/>
+				<text x="21" y="30" text-anchor="middle" fill="#3498DB" font-size="5.5" font-family="DM Mono, monospace">Am</text>
+				<rect x="12" y="36" width="18" height="10" rx="1" stroke="#3498DB" stroke-width="1.4"/>
+				<text x="21" y="44" text-anchor="middle" fill="#3498DB" font-size="5.5" font-family="DM Mono, monospace">F</text>
+				<!-- Now bar -->
+				<rect x="12" y="50" width="76" height="10" rx="1" stroke="#FF9500" stroke-width="1.8" opacity="0.9"/>
+				<text x="50" y="58" text-anchor="middle" fill="#FF9500" font-size="5.5" font-family="DM Mono, monospace">▶ C  (now)</text>
+				<!-- Arrow -->
+				<path d="M50 6 L50 50" stroke="#dde0e6" stroke-width="0.7" stroke-dasharray="2 2"/>
+				<polygon points="47,48 50,53 53,48" fill="#dde0e6" opacity="0.7"/>
+				<text x="66" y="8" fill="#9B59B6" font-size="5.5" font-family="DM Mono, monospace" opacity="0.5">uncommitted</text>
+				<text x="66" y="30" fill="#3498DB" font-size="5.5" font-family="DM Mono, monospace" opacity="0.7">committed</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--violet)">Commitment Protocol</h4>
+			<p>ReaLJam addresses latency through interface design rather than inference optimization. The AI generates chords several bars ahead, partitioning them into *committed* predictions (immutable, rendered in solid blue) and *uncommitted* ones (flexible, rendered semi-transparently). The human sees committed chords before they play, restoring the anticipatory co-adaptation that makes ensemble performance possible.</p>
+		</div>
+	</div>
+</div>
+
+## Ghost in the Keys: Aria-Duet
+
+Bradshaw et al. (2025) introduce a system that frames human-AI interaction as a conversation between two pianists sharing one instrument. The Yamaha Disklavier functions simultaneously as input device (capturing the human's MIDI performance) and output device (replaying the AI's generation acoustically). The human plays a passage, signals a handover by pressing the left pedal, and the model generates a coherent continuation performed on the same physical piano.
+
+The generative model, *Aria*, is an autoregressive transformer trained on over 100,000 hours of solo piano MIDI from the Aria-MIDI dataset. Two post-training modifications appear salient. First, the model is fine-tuned with explicit sustain pedal tokens, as performers reported that simulated sustain was perceptually jarring. Second, duplicate and near-duplicate pieces are removed from the training corpus to suppress the tendency to complete famous themes verbatim, a behavior that is both musically uninteresting and potentially problematic from a copyright perspective.
+
+<LatencyTimeline />
+
+<p class="muted">We encourage playing through both modes to hear the latency difference. The <strong>continuous prefill</strong> strategy amortizes the O(N² · d) KV cache computation over the human's playing time, distributing it across K chunks rather than computing it in a single operation at handover. The remaining 150ms overhead is for *speculative re-evaluation*: at handover, any notes still sounding have unknown durations. The model predicts a short future of 100 to 200ms to establish correct context before full generation begins.</p>
+
+Beyond the engineering contributions, the paper evaluates musical quality along four dimensions, informed by musicological analysis of the system's output across six pieces from distinct stylistic traditions:
+
+*Semantic consistency* concerns whether the AI maintains the musical vocabulary of the piece. In a passage grounded in the Freygish mode, for instance, the AI should not default to Western diatonic patterns; in ragtime, the syncopated 2/4 feel should persist across the AI's continuation.
+
+*Prosody* concerns whether the AI follows the micro-improvisations the human introduces. Liszt's *Ave Maria* was performed with several expressive variations (e.g., suspensions, rhythmic displacements). The AI's continuation captured these as part of the contextual vocabulary rather than reverting to the score's original phrasing.
+
+*Musical dialogue* concerns whether the AI develops coherent musical responses that reference the human's phrases and motifs. In the most successful exchanges (the Ave Maria session), the AI maintained three stylistically distinct voices throughout an improvised variation.
+
+*Phrasal discourse* concerns whether the AI's phrases exhibit logical shape. Well-formed musical phrases have distinct beginnings (anacrusis), middles, and ends (cadence). The paper reports coherent phrase-level structure across all six test pieces, though we note that the evaluation is conducted by the authors themselves rather than through a blind protocol.
+
+## ReaLJam: Real-Time Chord Accompaniment
+
+Scarlatos et al. (CHI 2025) approach the latency problem from the opposite direction. Rather than eliminating the bottleneck at the inference level, they make it perceptually invisible through interface design. The human plays melody over a MIDI keyboard in a web browser; the AI plays accompanying chords. The system addresses three interlocking challenges.
+
+The first is *anticipation*. The AI generates chords several beats into the future by predicting how the melody will continue. This requires two model variants. The *offline* model has access to both past and future melody and is used for planning and warm-starts. The *online* model, which is the variant used at inference time, sees only past melody, but is fine-tuned via reinforcement learning to produce output that appears as though it had access to future context.
+
+The second is *communication*. The agent's planned chords are displayed to the human through a *waterfall display*, a chord grid in which upcoming notes cascade toward a piano keyboard, an interface borrowed from Synthesia and Guitar Hero. Committed chords (immutable after their deadline) appear in solid blue; uncommitted chords that may still adapt appear semi-transparently.
+
+The third is *synchronization*. A stateless client-server loop ensures chords play at the correct time despite network round-trip latency. The client caches upcoming committed chords while awaiting server responses. As long as the lookahead window in seconds exceeds the round-trip time (at 150 BPM with a one-beat lookahead, the safe margin is approximately 0.32 seconds), no audible delay is perceived.
+
+<AnticipateLookahead />
+
+<p class="muted">Toggle lookahead on and off to observe the difference in what the human can anticipate. With lookahead enabled, committed chords (solid blue) are visible two bars ahead of the playhead, and the human can adapt their melody accordingly. Uncommitted chords (purple) may still change based on new input. Without lookahead, the future is opaque.</p>
+
+The RL fine-tuning uses a discriminator D trained to distinguish online from offline output. The reward takes the form:
+
+<div class="formula-block">
+<span class="math-it">R</span>(<span class="math-it">c<sub>t</sub></span>, <span class="math-it">m<sub>t:t+L</sub></span>) &nbsp;=&nbsp;
+<span class="math-it">D</span>(<span class="math-it">c<sub>t</sub></span> | <span class="math-it">m<sub>past</sub></span>, <span class="math-it">m<sub>t:t+L</sub></span>) &minus;
+<span class="math-it">D</span>(<span class="math-it">c<sub>t</sub></span> | <span class="math-it">m<sub>past</sub></span>)
+</div>
+
+<p class="muted">Two RL variants are evaluated. RL-S assigns rewards at the end of a full chord sequence (a sparse reward signal, analogous to outcome-based RLHF). RL-M assigns rewards at every timestep (a dense reward signal, analogous to process-based RLHF). RL-M shows empirically better local harmonic coherence, which supports the intuition that accompaniment in an interactive setting requires good beat-by-beat decisions rather than globally sensible sequences alone.</p>
+
+## How They Compare
+
+We observe that these two papers represent distinct design philosophies applied to the same problem:
+
+<div class="comparison-table">
+
+| Dimension | Ghost in the Keys (Aria-Duet) | ReaLJam |
+|---|---|---|
+| **Task** | Full compositional continuation | Chord accompaniment |
+| **Hardware** | Yamaha Disklavier | Web browser + MIDI |
+| **Model** | Autoregressive, note-level | Transformer + RL, chord-level |
+| **Latency strategy** | Eliminate via KV prefill | Mask via lookahead + commitment |
+| **User control** | Binary (pedal = handover) | Fine-grained UI parameters |
+| **Training data** | 100k hr piano MIDI (Aria-MIDI) | ~30k pop songs (Hooktheory) |
+| **Evaluation** | Musicological analysis (4 dimensions) | User study (experienced musicians) |
+
+</div>
+
+The user study in ReaLJam produced one particularly counterintuitive finding: musicians who felt *more in control* of the AI's output rated their sessions *lower*, while those who accepted surprising AI choices rated sessions higher. The authors refer to this as the *surprisal-control paradox*, and we posit that it raises a genuine question about design goals in creative AI systems. If the aim of an interactive music tool is to maximize user satisfaction, the interface design goal of maximizing user control may in fact be counterproductive. Being surprised, it appears, may be the point.
+
+## Discussion Questions
+
+1. Aria-Duet evaluates output through musicological analysis conducted by the authors themselves, without a blind user study. ReaLJam conducts a user study with experienced musicians but does not include musicological evaluation. Which methodology tells us more about whether a system "works" in the context of human-AI co-creation? We note that the two approaches may be measuring fundamentally different things (i.e., musical quality versus musician satisfaction).
+
+2. The KV prefill strategy assumes that chunks can be added to the cache incrementally without loss of coherence. Under what conditions does this assumption break down? In particular, what happens if the human pivots style mid-phrase, such that the early cache content is contextually mismatched with the handover context?
+
+3. ReaLJam's user study suggests that more control may produce lower satisfaction. Should future AI music tools intentionally reduce user control in favor of surprise? What are the practical and ethical limits of this design direction, and does the finding generalize beyond the specific cohort of musicians studied?
+
+4. Both models are trained on Western-centric data (classical piano for Aria-MIDI, pop chord progressions from Hooktheory). What happens when a user plays in a non-Western scale, a jazz standard with altered harmony, or a rhythmically complex style that falls outside the training distribution?
+
+5. Aria-Duet uses a physical acoustic piano as the output device. We posit that the embodied feedback loop (hearing one's own notes and the AI's notes in the same acoustic space) may contribute substantially to the perceived quality of the musical dialogue, beyond what the model itself affords. How might one disentangle the contribution of the model from the contribution of the interface?
+
+6. Both papers address what we might call the *last-mile interaction problem*, in which the generative model may be sufficiently capable, but the interface between model and musician is the constraining factor. This is a different regime from the Onsets & Frames, MT3, and NMP papers we examined in the previous session, where the model architecture itself was the primary bottleneck. What does this shift suggest about the trajectory of the field?
+
+## Papers & Resources
+
+<div class="resources-grid">
+	<ResourceLink href="https://arxiv.org/pdf/2511.01663" category="Paper · arXiv 2025" categoryType="paper" label="Ghost in the Keys: A Disklavier Demo for Human-AI Musical Co-Creativity" host="Bradshaw, Spangher, Biderman, Colton" />
+	<ResourceLink href="https://arxiv.org/pdf/2502.21267" category="Paper · CHI 2025" categoryType="paper" label="ReaLJam: Real-Time Human-AI Music Jamming with RL-Tuned Transformers" host="Scarlatos, Wu, Simon, Roberts, Cooijmans, Jaques, Tarakajian, Huang" />
+	<ResourceLink href="https://arxiv.org/abs/2306.08620" category="Paper · arXiv 2023" categoryType="paper" label="Anticipatory Music Transformer" host="Thickstun et al. — direct predecessor to ReaLJam's anticipation mechanism" />
+	<ResourceLink href="https://arxiv.org/abs/2307.04686" category="Paper · arXiv 2023" categoryType="paper" label="VampNet: Music Generation via Masked Acoustic Token Modeling" host="Garcia et al. — companion session: masked generation vs. turn-taking" />
+	<ResourceLink href="https://arxiv.org/abs/1809.04281" category="Music Cognition" categoryType="paper" label="Musicking: The Meanings of Performing and Listening (Small, 1998)" host="Theoretical framework for why embodied interaction matters" />
+	<ResourceLink href="https://github.com/mclemcrew/music-ai-reading-group" category="Code · Examples" categoryType="tool" label="Reading Group Repo" host="github.com/mclemcrew" />
+</div>
+
+<style>
+	.comparison-table {
+		margin: 1.2rem 0;
+		overflow-x: auto;
+	}
+
+	.comparison-table table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.875rem;
+		font-family: var(--font-mono);
+	}
+
+	.comparison-table th {
+		text-align: left;
+		padding: 0.5rem 0.75rem;
+		border-bottom: 2px solid var(--border);
+		color: var(--text-muted);
+		font-weight: 600;
+	}
+
+	.comparison-table td {
+		padding: 0.45rem 0.75rem;
+		border-bottom: 1px solid var(--border);
+		vertical-align: top;
+		line-height: 1.5;
+	}
+
+	.comparison-table tr:last-child td {
+		border-bottom: none;
+	}
+
+	.comparison-table td:first-child {
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+
+	.formula-block {
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--violet);
+		border-radius: 6px;
+		padding: 0.9rem 1.2rem;
+		font-size: 1.05rem;
+		color: var(--text);
+		margin: 1.2rem 0;
+		line-height: 2.2;
+	}
+
+	.math-it {
+		font-style: italic;
+		font-family: 'Times New Roman', 'Georgia', serif;
+	}
+
+	@media (max-width: 640px) {
+		.formula-block {
+			font-size: 0.9rem;
+			padding: 0.75rem 1rem;
+			overflow-x: auto;
+		}
+
+		.comparison-table {
+			font-size: 0.8rem;
+		}
+	}
+</style>
