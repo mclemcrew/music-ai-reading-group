@@ -577,22 +577,343 @@ density and coherence.
 
 ---
 
+## 17. Switch to HuggingFace Quickstart Approach
+
+### Problem (interactive demo)
+`run-demo-file.sh` and `run-demo-live.sh` passed `--top_p 0.95` and
+`${PENALTIES:+--penalties}` to the upstream `demo_mlx.py`, but **neither
+argument exists** in the upstream argparser (lines 86–172). Argparse
+crashed with `error: unrecognized arguments: --top_p 0.95` before
+generation even started.
+
+### Problem (standalone generation)
+All attempts to get good standalone output from `model-demo.safetensors`
+required increasingly aggressive workarounds (grammar constraints,
+penalties, PED_OFF boost removal). The root issue: model-demo was
+optimized for interactive use (short bursts, beam search, human context
+refresh). For standalone generation, the HuggingFace quickstart
+recommends a completely different setup:
+
+```python
+model.generate(temperature=0.97, top_p=0.95)  # That's it. No tricks.
+```
+
+### Root causes
+1. **Wrong checkpoint** — `model-demo.safetensors` (interactive, vocab
+   17729) instead of `model-gen.safetensors` (generation-finetuned,
+   vocab 17727)
+2. **Wrong model config** — `"medium-emb"` (has embedding adapter)
+   instead of `"medium"` (plain LM)
+3. **Wrong tokenizer** — pedal-enabled (vocab 17729) instead of
+   default (vocab 17727)
+4. **Custom grammar constraints** (~60 lines of onset/dur/prefix
+   masking) — the model produces valid sequences naturally; constraints
+   corrupted the probability distribution
+5. **Custom penalties** (PEDAL_PENALTY, TIME_PENALTY, consecutive
+   `<T>` limiter) — fought the model's learned distribution
+6. **Sampling** — min_p kills note tokens (section 12); even top_p
+   with penalties was suboptimal
+
+### What we did
+
+**Interactive demo:**
+- Removed `--top_p 0.95` and `${PENALTIES:+--penalties}` from both
+  run scripts. The upstream defaults (`temp=0.95, min_p=0.03`) are
+  what was shown at NeurIPS and work for interactive use.
+
+**Standalone generation:**
+- Switched to `model-gen.safetensors` (downloaded via setup.sh)
+- Use default `AbsTokenizer()` (no pedal, vocab 17727)
+- Use `config_name="medium"` (no embedding adapter)
+- Rewrote `sweep_generate.py` with `temp=0.97, top_p=0.95`
+- Auto-detects checkpoint type from embedding shape (17727 vs 17729)
+  for backwards compatibility with model-demo
+
+**Key discovery: style prefix tokens and time penalty are essential.**
+
+The HuggingFace custom code (`modeling_aria.py`) has NO grammar
+constraints or special logit processing — it's a plain transformer
+with standard `GenerationMixin.generate()`. The model sometimes
+produces invalid sequences (note→note without onset/dur) when
+generating long sequences autonomously.
+
+Three mechanisms are needed for good standalone generation:
+1. **Style prefix tokens** (`--form waltz --genre classical`) —
+   the model was trained with form/genre/composer metadata. Without
+   it, output lacks style coherence and density.
+2. **Structural grammar constraints** — force onset after notes,
+   dur after note+onset, mask prefix/dur/onset at free positions.
+   Prevents invalid token sequences.
+3. **Time penalty** (default 3.0) — the single `<T>` token absorbs
+   ~18% probability mass vs hundreds of note tokens splitting the
+   rest. Without penalty: 19.5% silence tokens. With penalty: 1.3%.
+
+Results (waltz prompt, model-gen, 2048 tokens):
+
+| Config | Notes | Duration | Notes/min |
+|--------|-------|----------|-----------|
+| No constraints | 97 | 360s | 16 |
+| Grammar + penalty 1.5 | 302 | 527s | 34 |
+| Grammar + prefix + penalty 3.0 | **413** | **124s** | **199** |
+
+---
+
+## 18. Conditioned Generation with Style Embeddings
+
+### Discovery
+The NeurIPS demo uses **conditioned generation**: a style embedding
+computed from the reference MIDI is injected into the KV cache at
+position 0 via `fill_condition_kv()`. This is the "secret sauce"
+that steers the model toward coherent, style-appropriate output.
+
+Three checkpoints work together:
+- `model-demo.safetensors` (vocab 17729) — inference model with
+  embedding adapter (`medium-emb` config, `emb_size: 512`)
+- `model-embedding.safetensors` — computes 512-dim style embeddings
+  from reference MIDI via contrastive learning (separate `TransformerEMB`)
+- `model-gen.safetensors` (vocab 17727) — generation-finetuned but
+  has NO embedding adapter, cannot do conditioned generation
+
+### Pipeline
+1. Load embedding model (`TransformerEMB`, PyTorch, CPU)
+2. Compute style embedding from reference MIDI (chunk into 300-note
+   segments, average embeddings across chunks)
+3. Load inference model (`TransformerLM`, MLX, `medium-emb` config)
+4. Setup KV cache, inject embedding at position 0 via
+   `model.fill_condition_kv(emb)`
+5. All subsequent positions use `EMBEDDING_OFFSET = 1`
+6. Generate with grammar constraints + top_p sampling
+
+### Upstream bugs found
+- **`fill_condition_kv` in `model_mlx.py:186`** passes wrong args
+  to `TransformerBlock.__call__` — missing `max_kv_pos` parameter.
+  Crashes with `TypeError: missing 1 required positional argument`.
+  Fixed with monkey-patch in our test scripts.
+- **`sample_batch_cfg` in `sample_mlx.py:188`** also broken — missing
+  `max_kv_pos` in `prefill()`/`decode_one()` calls, AND `pad_idxs`
+  shape mismatch with causal mask. The MLX CFG path was never tested
+  upstream (CUDA path works differently).
+
+### Results (conditioned vs unconditioned, 10s prompt, ~10s gen)
+
+Honest evaluation separating prompt notes from generated notes:
+
+| Prompt | Unconditioned (model-gen) | Conditioned (model-demo + embedding) |
+|--------|--------------------------|--------------------------------------|
+| nocturne | 4 notes in 10s (sparse) | 5 notes in 11s |
+| waltz | 6 notes in 10s | 14 notes in 12s |
+| smooth_jazz | 8 notes in 10s | 18 notes in 12s |
+| classical | 10 notes in 10s | **44 notes in 14s (195 n/m)** |
+
+Conditioning helps (especially classical), but the model generates
+at ~20-60% of the prompt's note density. This is a fundamental
+limitation of model-demo for standalone generation — it was trained
+for short interactive bursts with beam search + human context refresh.
+
+### Raw token analysis (model-demo without grammar)
+Without grammar constraints, the model generates degenerate sequences:
+- `<PED_OFF>` dominates top-1 at **30-95% probability** at nearly
+  every position
+- Notes get scattered between pedal spam without onset→dur structure
+- Grammar constraints are essential, not optional
+
+### CFG (Classifier-Free Guidance) investigation
+Also tested the double-batch CFG approach (conditioned + unconditioned
+logit blending with gamma warmup). Two approaches tried:
+1. **Batched** (upstream `sample_batch_cfg` pattern) — broken on MLX
+   due to `pad_idxs` broadcasting mismatch
+2. **Two-model** (separate forward passes) — works but produces
+   1-6 generated notes per 10s, worse than single-model conditioning.
+   The two KV caches diverge, degrading the blended logits.
+
+---
+
+## 19. Fix Upstream MLX Bugs for Batched CFG
+
+### Problem
+Three upstream bugs in the aria MLX code prevent `sample_batch_cfg` from
+working. The two-model CFG workaround (`test_cfg_gen.py`) uses 2x memory,
+has 2x latency, and produces poor results because the two KV caches
+diverge after a few generation steps.
+
+### Bug 1: `fill_condition_kv` missing `max_kv_pos` arg
+**File:** `aria/inference/model_mlx.py:186-187`
+
+The `fill_condition_kv` method called `layer(x, input_pos, offset, mask)`
+— 4 args — but `TransformerBlock.__call__` expects 5:
+`(x, input_pos, max_kv_pos, offset, mask)`. This made `offset=0` land
+in the `max_kv_pos` slot and `mask` land in the `offset` slot.
+
+**Fix:** Add `max_kv_pos=0` parameter, also slice mask to `:1` to match:
+```python
+mask = self.causal_mask[None, None, input_pos, :1]
+max_kv_pos = 0
+for layer in self.encode_layers:
+    x = layer(x, input_pos, max_kv_pos, offset, mask)
+```
+
+### Bug 2: `pad_idxs` shape mismatch in `Transformer.__call__`
+**File:** `aria/inference/model_mlx.py:210-212`
+
+`pad_idxs` has shape `[batch, total_len]` but the causal mask after
+slicing is `[1, 1, S, max_kv_pos+1]`. The expand_dims produced
+`[batch, 1, 1, total_len]` which can't broadcast against
+`[batch, 1, S, max_kv_pos+1]` when `total_len != max_kv_pos+1`.
+
+**Fix:** Slice `pad_idxs` to match the KV dimension:
+```python
+pad_mask = pad_idxs[:, :max_kv_pos + 1]
+pad_mask = mx.expand_dims(mx.expand_dims(pad_mask, axis=1), axis=1)
+mask = mask & ~pad_mask
+```
+
+### Bug 3: `prefill`/`decode_one` missing `max_kv_pos`
+**File:** `aria/inference/sample_mlx.py:16-47`
+
+Both functions passed `offset` but not `max_kv_pos` to the model. Since
+`TransformerLM.__call__` has `max_kv_pos: int | None = None`, the value
+`None` propagated to `Transformer.__call__` where
+`mask = self.causal_mask[..., :max_kv_pos + 1]` crashes with
+`TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'`.
+
+**Fix:** Added `_max_kv_pos()` helper (chunk-aligned like `demo_mlx.py`)
+and pass it to both functions.
+
+### Bug 4: `sample_batch_cfg` cache size off-by-one
+**File:** `aria/inference/sample_mlx.py:240`
+
+`setup_cache(max_seq_len=total_len)` but actual KV positions go up to
+`total_len - 1 + embedding_offset`, exceeding the causal mask.
+Similarly, `pad_idxs = mx.zeros(seq.shape)` was `[batch, total_len]`
+but needs `[batch, total_len + embedding_offset]` to cover position 0.
+
+**Fix:** `setup_cache(max_seq_len=total_len + embedding_offset)` and
+`pad_idxs = mx.zeros((num_variations, total_len + embedding_offset))`.
+
+### New script: `test_batched_cfg.py`
+Single-model batched CFG using the fixed `sample_batch_cfg` pattern:
+- batch[0] = conditioned (sees embedding at KV position 0)
+- batch[1] = unconditioned (position 0 masked via pad_idxs)
+- Logit blending: `gamma * cond + (1-gamma) * uncond` with warmup
+- Grammar constraints on blended logits
+- Half the memory of the two-model approach
+- No KV cache divergence (both rows share one model)
+
+---
+
+## 20. Chunked Generation with Periodic Beam Search
+
+### Problem
+Standalone generation degenerates over time: note density drops to
+20-60% of the prompt. Penalties and CFG are band-aids that fight
+symptoms, not the cause.
+
+### Root cause
+**Architecture mismatch**, not a model limitation. The NeurIPS demo
+generates dense, musical output using the SAME model because it:
+1. Uses beam search (TIME_TOK_WEIGHTING=-5) to start each turn with a NOTE
+2. Generates short bursts (~2-5s), never long enough for sparsity snowball
+3. Refreshes context every few seconds with human input
+
+Our standalone generation had none of these: one long autoregressive
+run, no beam search, no interruption. Small errors compound → sparsity
+snowball.
+
+### Fix: replicate the demo loop without a human
+Generate in chunks with periodic beam search re-anchoring:
+
+1. **Prefill prompt + force `<T>` advance** past prompt boundary
+2. **For each chunk (~5s music time):**
+   a. **Beam search** (width=3) — `<T>`, `<PED_ON>`, `<PED_OFF>`, onset,
+      dur, prefix, non-piano ALL masked. Only piano note tokens survive.
+      Forces a `(piano_note, onset)` start.
+   b. **Autoregressive decode** with:
+      - Grammar constraints (onset/dur forcing)
+      - `TIME_PENALTY = 3.0` at free positions (combats `<T>` dominance)
+      - `min_notes_before_time` — fully mask `<T>` until N notes generated
+        in this chunk. **This is the key mechanism that produces chords**
+        instead of single notes followed by 5s of silence.
+      - Pedal penalty (4.0) at free positions
+      - Non-piano instruments + out-of-range pitch/velocity masked
+   c. **Break only at safe positions** (after dur, time, or pedal+onset)
+      to avoid corrupting note triples mid-sequence
+   d. **Cut off** when chunk_ms reached, note cap hit, or 2+ `<T>` tokens
+3. **Repeat** — beam search re-anchors the model toward notes
+
+### Evolution of results
+
+| Stage | Waltz | Classical | Nocturne |
+|-------|-------|-----------|----------|
+| Baseline (conditioned, no chunking) | 57 n/min | 34 n/min | 24 n/min |
+| + Chunked beam search | 113 n/min | 404 n/min | 21 n/min |
+| + Time penalty + min_notes=6 | **944 n/min** | **1123 n/min** | **493 n/min** |
+
+### Final all-demos run (6 prompts)
+
+| Prompt | Prompt n/min | Gen notes | Gen n/min | Notes/chunk |
+|--------|-------------|-----------|-----------|-------------|
+| waltz | 264 | 156 | 944 | 26 |
+| classical | 312 | 186 | 1123 | 31 |
+| nocturne | 216 | 78 | 493 | 13 |
+| smooth_jazz | 270 | 110 | 336 | 21 |
+| pokey_jazz | 438 | 126 | 795 | 21 |
+| yesterday | 126 | 108 | 329 | 21 |
+
+All beams pick piano notes. All chunks (after first) generate dense,
+multi-note passages with chords. Zero `<T>` tokens within most chunks.
+
+### Per-style tuning
+```bash
+python test_chunked_gen.py waltz.mid    --min_notes 6 --max_notes_per_chunk 25
+python test_chunked_gen.py nocturne.mid --min_notes 3 --max_notes_per_chunk 12
+python test_chunked_gen.py classical.mid --min_notes 8 --max_notes_per_chunk 30
+```
+
+---
+
 ## Status
 
-**Current recommended settings for standalone generation:**
-- `top_p=0.95` (NOT min_p — see section 12)
-- `temp=0.95`
-- `TIME_PENALTY=1.5` at free positions
-- `PEDAL_PENALTY=1.5` at free positions
-- Max 2 consecutive `<T>` tokens (additional −10.0 after limit)
-- No `PED_OFF +3` boost
-- Grammar constraints active (sections 3–7)
+**Standalone generation (sweep_generate.py):**
+- `model-gen.safetensors` (vocab 17727, generation-finetuned)
+- `AbsTokenizer()` default (no pedal)
+- `config_name="medium"` (no embedding adapter)
+- `top_p=0.95, temp=0.97`
+- Style prefixes: `--form waltz --genre classical` (crucial for density)
+- Structural grammar constraints (onset/dur forcing, prefix masking)
+- Time penalty 3.0 (reduces `<T>` dominance from ~18% to ~1%)
+- Auto-detects model-demo fallback if only that checkpoint is available
 
-**Current recommended settings for interactive demo:**
-- `top_p=0.95` (safer) or `min_p=0.03` (upstream default)
-- `temp=0.95`
-- Grammar constraints active
-- `PED_OFF +3` boost active
-- No penalties needed (short bursts + human context)
+**Conditioned generation (test_conditioned_gen.py):**
+- `model-demo.safetensors` (vocab 17729) + `model-embedding.safetensors`
+- Style embedding from reference MIDI injected into KV cache
+- Grammar constraints required (model produces pedal spam without them)
+- No time penalty (embedding handles pacing)
+- Best for: short bursts (~10s), classical style
+- Known issue: sparse output for some styles, especially nocturne
 
-Run scripts updated: `--temp 0.95 --top_p 0.95`.
+**Chunked generation (test_chunked_gen.py) — BEST APPROACH:**
+- `model-demo.safetensors` (vocab 17729) + `model-embedding.safetensors`
+- Replicates the NeurIPS demo loop headlessly
+- Beam search forces piano NOTE start (onset/dur/time/pedal/non-piano all masked)
+- Chunks of ~5s music time → beam search → another chunk → repeat
+- `TIME_PENALTY=3.0` + `min_notes_before_time` = produces chords, not single notes
+- `pedal_penalty=4.0`, non-piano + out-of-range pitch/velocity masked
+- Breaks only at safe positions (after dur/time/pedal+onset)
+- Results: 6 prompts tested, 329–1123 n/min generated, chords in every chunk
+- Per-style: `--min_notes` and `--max_notes_per_chunk` tune density
+- Output MIDI files: `recordings/all-demos/`
+
+**Batched CFG (test_batched_cfg.py):**
+- `model-demo.safetensors` (vocab 17729) + `model-embedding.safetensors`
+- Single model, batch=2 (conditioned + unconditioned)
+- `pad_idxs` masks embedding position for unconditioned row
+- CFG blend: `gamma * cond + (1-gamma) * uncond` with 250-step warmup
+- Grammar constraints on blended logits
+- Requires upstream bug fixes (section 19)
+- Next: tune `cfg_gamma` and `temp` per style
+
+**Interactive demo (run-demo-file.sh / run-demo-live.sh):**
+- `model-demo.safetensors` (vocab 17729, with pedal)
+- Upstream `demo_mlx.py` unmodified
+- `temp=0.95, min_p=0.03` (upstream defaults)
+- No custom flags passed

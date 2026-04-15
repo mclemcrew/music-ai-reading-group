@@ -32,6 +32,8 @@ ARIA_DIR="${ARIA_DIR:?Set ARIA_DIR in config.sh}"
 CHECKPOINT_DIR="${SCRIPT_DIR}/checkpoints"
 CHECKPOINT_FILE="${CHECKPOINT_DIR}/model-demo.safetensors"
 CHECKPOINT_URL="https://huggingface.co/loubb/aria-medium-base/resolve/main/model-demo.safetensors?download=true"
+CHECKPOINT_GEN_FILE="${CHECKPOINT_DIR}/model-gen.safetensors"
+CHECKPOINT_GEN_URL="https://huggingface.co/loubb/aria-medium-base/resolve/main/model-gen.safetensors?download=true"
 SOUNDFONT_DIR="${SCRIPT_DIR}/soundfonts"
 SOUNDFONT_FILE="${SOUNDFONT_DIR}/FluidR3_GM.sf2"
 SOUNDFONT_URL="https://keymusician01.s3.amazonaws.com/FluidR3_GM.sf2"
@@ -132,6 +134,34 @@ if [ "${FILESIZE}" -lt 1000000000 ]; then
     echo "WARNING: Checkpoint file seems too small (${FILESIZE} bytes)."
     echo "  Expected ~1.4 GB. The download may have failed."
     echo "  Delete ${CHECKPOINT_FILE} and re-run setup.sh"
+fi
+
+# --- Download generation checkpoint ------------------------------------------
+
+echo ""
+echo "--- Downloading generation checkpoint ---"
+
+if [ -f "${CHECKPOINT_GEN_FILE}" ]; then
+    echo "Checkpoint already exists at ${CHECKPOINT_GEN_FILE}"
+    echo "  (Delete it and re-run setup.sh to re-download)"
+else
+    echo "Downloading model-gen.safetensors (~1.4 GB)..."
+    echo "  Source: huggingface.co/loubb/aria-medium-base"
+    echo "  This is the generation-finetuned checkpoint for standalone use."
+    echo ""
+    curl -L --progress-bar \
+        -o "${CHECKPOINT_GEN_FILE}" \
+        "${CHECKPOINT_GEN_URL}"
+    echo ""
+    echo "[ok] Generation checkpoint downloaded"
+fi
+
+# Verify generation checkpoint
+GEN_FILESIZE=$(stat -f%z "${CHECKPOINT_GEN_FILE}" 2>/dev/null || stat -c%s "${CHECKPOINT_GEN_FILE}" 2>/dev/null)
+if [ "${GEN_FILESIZE}" -lt 1000000000 ]; then
+    echo "WARNING: Generation checkpoint seems too small (${GEN_FILESIZE} bytes)."
+    echo "  Expected ~1.4 GB. The download may have failed."
+    echo "  Delete ${CHECKPOINT_GEN_FILE} and re-run setup.sh"
 fi
 
 # --- FluidSynth (optional) --------------------------------------------------

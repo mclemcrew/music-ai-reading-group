@@ -1,178 +1,228 @@
 # Aria-Duet: Real-Time Human-AI Piano Demo
 
-Live demo of **Ghost in the Keys** (Bradshaw et al., NeurIPS Creative AI 2025) — a real-time turn-taking piano duet between a human and the [Aria](https://github.com/eleutherai/aria) model running on Apple Silicon.
+This directory contains wrappers and notes for running the released ARIA duet demo from the NeurIPS Creative AI paper.
 
-**Paper:** [The Ghost in the Keys: A Disklavier Demo for Human-AI Musical Co-Creativity](https://arxiv.org/abs/2511.01663v1)
+The important operational detail is that the best results now come from a **fresh upstream Aria clone and fresh upstream virtual environment**, not from the older local editable-install flow we were using earlier.
 
-## How It Works
+## Current Status
 
-You play piano (via MIDI keyboard or simulated from a file). When you're ready, press **Enter** — the AI takes over and generates a musical continuation in the style of what you just played. Press Enter again to take back control. Back and forth, human and AI.
+- The author-updated `model-demo.safetensors` is much better than the earlier broken behavior we were seeing.
+- `run-demo-file.sh` is the fastest way to confirm the updated demo works on your machine.
+- `run-demo-live.sh` is ready, but it requires a **real MIDI input device**. If macOS only exposes `IAC Driver Bus 1`, the script will now fail fast instead of pretending the live setup is valid.
+- The fresh upstream repo currently omits `demo/demo-tokenizer-config.json`. The wrappers in this directory automatically copy a compatible version into place when needed.
 
-Under the hood: Aria is a 0.7B-parameter autoregressive transformer (LLaMA 3.2 1B architecture) trained on 100k+ hours of piano MIDI transcriptions, running inference via MLX on Apple Silicon.
+## Recommended Setup
 
-## Prerequisites
+Use a fresh clone exactly as the author suggested:
 
-- **macOS** with Apple Silicon (M1/M2/M3/M4)
-- **Python 3.11** (installed automatically via `uv`)
-- **[uv](https://docs.astral.sh/uv/)** — Python package manager
-- **Aria repo** cloned at `/Users/mclemens/Development/aria`
+```bash
+git clone https://github.com/EleutherAI/aria /path/to/fresh/aria
+cd /path/to/fresh/aria
+uv venv --python 3.12
+source .venv/bin/activate
+uv sync --extra demo
+```
+
+Then download the updated demo checkpoint from Hugging Face:
+
+- `model-demo.safetensors`
+- source: <https://huggingface.co/loubb/aria-medium-base/tree/main>
+
+Place it at:
+
+```bash
+/path/to/fresh/aria/model-demo.safetensors
+```
+
+## Project Configuration
+
+Set [config.sh](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/config.sh) to point at your fresh clone:
+
+```bash
+ARIA_DIR="/path/to/fresh/aria"
+MIDI_OUT="IAC Driver Bus 1"
+MIDI_THROUGH="IAC Driver Bus 1"
+MIDI_IN="Your USB MIDI Keyboard"
+```
+
+You can also override these at runtime:
+
+```bash
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh
+ARIA_DIR=/path/to/fresh/aria ./run-demo-live.sh
+```
+
+The wrappers prefer:
+
+1. `${ARIA_DIR}/.venv/bin/python3`
+2. `${ARIA_DIR}/model-demo.safetensors`
+
+If the fresh clone is missing `demo/demo-tokenizer-config.json`, the wrapper installs the compatibility file from:
+
+- [compat/demo-tokenizer-config.json](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/compat/demo-tokenizer-config.json)
+
+## MIDI Setup
+
+### Output Routing
+
+Enable IAC Driver in macOS Audio MIDI Setup:
+
+1. Open `Audio MIDI Setup.app`
+2. Open `Window > Show MIDI Studio`
+3. Double-click `IAC Driver`
+4. Check `Device is online`
+5. Ensure at least one port exists, usually `Bus 1`
+
+Your audio engine should listen on `IAC Driver Bus 1`.
+
+Examples:
+
+- Ableton Live: MIDI track input = `IAC Driver Bus 1`, monitor = `In`
+- FluidSynth: route demo output to the IAC bus you are monitoring
+
+### Input Routing
+
+For the live demo, you need a real MIDI input device such as:
+
+- `CASIO USB-MIDI`
+- another USB controller exposed in CoreMIDI
+
+If `python list-midi-ports.py` only shows `IAC Driver Bus 1`, the live demo is **not ready yet**. The wrapper will stop with an error if input and output resolve to the same port.
+
+Check ports with:
+
+```bash
+cd /Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet
+source .venv/bin/activate
+python list-midi-ports.py
+```
 
 ## Quick Start
 
-```bash
-cd ARIA-DUET
-
-# 1. One-time setup (creates venv, installs deps, downloads 1.4GB model)
-./setup.sh
-
-# 2. Discover your MIDI port names
-source .venv/bin/activate
-python list-midi-ports.py
-
-# 3. Update port names in the run scripts if needed (see Configuration below)
-
-# 4. Start your audio engine (see Audio Setup below)
-
-# 5. Test audio routing
-./run-playback-only.sh
-
-# 6. Run the demo!
-./run-demo-file.sh          # MIDI file input (laptop only, no hardware needed)
-./run-demo-live.sh          # Live MIDI keyboard input
-```
-
-## Audio Setup — Pick Your Tier
-
-### Tier 1: Ableton Live + UA Plugins (best sound)
-
-1. Open Ableton Live
-2. Create a new MIDI track
-3. Load a piano instrument (UA piano plugin, or any software piano)
-4. Set the track's MIDI input to **IAC Driver Bus 1** (or whichever port you configure)
-5. Set **Monitor** to **In**
-6. Arm the track for recording
-
-### Tier 2: FluidSynth (free, no DAW needed)
+From this directory:
 
 ```bash
-# Install FluidSynth + download SoundFont
-./setup.sh --with-fluidsynth
-
-# Start FluidSynth in one terminal
-./run-fluidsynth.sh
-
-# Run the demo in another terminal
-./run-demo-file.sh
+cd /Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet
 ```
 
-### Tier 3: Laptop Only (no MIDI keyboard, no DAW)
-
-Same as Tier 2, but use `run-demo-file.sh` instead of `run-demo-live.sh`. A MIDI file simulates human input — you press **Enter** on the laptop keyboard to trigger AI takeover.
-
-## MIDI Routing Setup (Required for All Tiers)
-
-### Enable IAC Driver (one-time)
-
-1. Open **Audio MIDI Setup.app** (`/Applications/Utilities/`)
-2. Menu: **Window > Show MIDI Studio**
-3. Double-click **IAC Driver**
-4. Check **Device is online**
-5. Ensure at least one port exists (e.g., "Bus 1")
-
-### Discover Port Names
+### 1. Verify audio routing
 
 ```bash
-source .venv/bin/activate
-python list-midi-ports.py
+ARIA_DIR=/path/to/fresh/aria ./run-playback-only.sh
 ```
 
-This shows all available MIDI input/output ports and suggests configuration values.
+If you hear piano, output routing is correct.
 
-### Configuration
-
-Each `run-*.sh` script has port name variables at the top:
+### 2. Verify the updated demo checkpoint
 
 ```bash
-MIDI_OUT="IAC Driver Bus 1"       # AI output → audio engine
-MIDI_THROUGH="IAC Driver Bus 1"   # Human input echo → audio engine
-MIDI_IN="USB MIDI Keyboard"       # Your controller (run-demo-live.sh only)
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/nocturne.mid
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/classical.mid
 ```
 
-Update these to match the exact port names from `list-midi-ports.py`.
+This is the current baseline sanity check. It uses the real upstream demo path with MIDI-file playback as the human side.
 
-## Available Scripts
+### 3. Run the live demo
 
-| Script | Purpose | Hardware needed |
-|--------|---------|----------------|
-| `setup.sh` | Install everything | — |
-| `list-midi-ports.py` | Show available MIDI ports | — |
-| `run-playback-only.sh` | Test audio routing (no model) | Audio engine |
-| `run-demo-file.sh` | Demo with MIDI file input | Audio engine |
-| `run-demo-live.sh` | Demo with USB MIDI keyboard | Audio engine + MIDI keyboard |
-| `run-fluidsynth.sh` | Start FluidSynth fallback audio | — |
+```bash
+ARIA_DIR=/path/to/fresh/aria ./run-demo-live.sh
+```
+
+Controls:
+
+- `Play on keyboard` -> human context capture
+- `Enter` -> AI takeover
+- `Enter` again -> return to human
+- `Type text + Enter` -> reset context
+- `Ctrl+C` -> quit
+
+The live wrapper now refuses to run if:
+
+- `MIDI_IN == MIDI_OUT`
+- `MIDI_IN == MIDI_THROUGH`
+
+That protects you from accidentally testing a feedback loop instead of a real keyboard path.
 
 ## Example MIDI Prompts
 
-The Aria repo includes several example MIDI files you can use:
+Useful shipped prompts from the upstream repo:
 
 ```bash
-./run-demo-file.sh /Users/mclemens/Development/aria/example-prompts/waltz.mid
-./run-demo-file.sh /Users/mclemens/Development/aria/example-prompts/nocturne.mid
-./run-demo-file.sh /Users/mclemens/Development/aria/example-prompts/classical.mid
-./run-demo-file.sh /Users/mclemens/Development/aria/example-prompts/smooth_jazz.mid
-./run-demo-file.sh /Users/mclemens/Development/aria/example-prompts/pokey_jazz.mid
-./run-demo-file.sh /Users/mclemens/Development/aria/example-prompts/yesterday.mid
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/waltz.mid
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/nocturne.mid
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/classical.mid
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/smooth_jazz.mid
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/pokey_jazz.mid
+ARIA_DIR=/path/to/fresh/aria ./run-demo-file.sh /path/to/fresh/aria/example-prompts/yesterday.mid
 ```
 
-## Demo Day Checklist (Wednesday)
+`waltz.mid`, `nocturne.mid`, and `classical.mid` were the best first-pass checks in our recent testing.
 
-- [ ] Start Ableton Live with UA piano on IAC Driver Bus 1
-- [ ] Verify audio: `./run-playback-only.sh` — hear piano?
-- [ ] Connect USB MIDI keyboard (if using live mode)
-- [ ] Pre-warm the model: run `./run-demo-file.sh`, let it load, do one takeover, Ctrl+C
-- [ ] For the actual demo: `./run-demo-live.sh` (or `run-demo-file.sh`)
-- [ ] If sharing over Zoom: use "Share Computer Audio" or route through virtual audio
+## Output Files
+
+Wrappers save recordings into:
+
+- [recordings](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/recordings)
+
+Typical outputs:
+
+- `file-demo-YYYYMMDD-HHMMSS.mid`
+- `live-demo-YYYYMMDD-HHMMSS.mid`
+
+Fresh upstream smoke-test outputs we generated live under `/tmp` were:
+
+- [out-waltz.mid](/tmp/aria-refresh.BizqOS/aria/out-waltz.mid)
+- [out-nocturne.mid](/tmp/aria-refresh.BizqOS/aria/out-nocturne.mid)
+- [out-classical.mid](/tmp/aria-refresh.BizqOS/aria/out-classical.mid)
+
+## Additional Scripts
+
+- [run-playback-only.sh](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/run-playback-only.sh): sends a MIDI file to the output port without loading the model
+- [run-demo-file.sh](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/run-demo-file.sh): uses MIDI-file playback as the human side of the duet
+- [run-demo-live.sh](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/run-demo-live.sh): live keyboard duet
+- [run-demo-faithful-headless.sh](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/run-demo-faithful-headless.sh): offline replay harness for debugging the takeover path
+- [list-midi-ports.py](/Users/mclemens/Development/music-ai-reading-group/experiments/aria-duet/list-midi-ports.py): inspect visible MIDI ports
 
 ## Troubleshooting
 
-### "No MIDI output ports found"
-Enable IAC Driver in Audio MIDI Setup.app (see above).
+### The live demo says the input port matches the output port
 
-### "MIDI port not found: IAC Driver Bus 1"
-The exact port name may differ. Run `python list-midi-ports.py` and update the scripts.
+That means macOS is not exposing a real MIDI keyboard to the process. Fix the hardware/CoreMIDI setup first, then rerun:
 
-### No sound from Ableton
-- Check the MIDI track's input is set to the correct IAC port
-- Set Monitor to **In** and arm the track
-- Check Ableton's audio output settings
-
-### Model takes a long time to load
-The first run compiles MLX kernels (~30-60 seconds on M4 Pro). Subsequent runs are faster. Pre-warm before your demo.
-
-### "Embedding shape mismatch" error
-You're using the wrong checkpoint. The demo requires `model-demo.safetensors` (with sustain pedal support), not the base `model.safetensors`. Re-run `./setup.sh`.
-
-### Generation sounds choppy or has glitches
-- Close other GPU-intensive applications
-- Try `--quantize` flag for lower memory usage (edit the run script)
-- Ensure your Mac has sufficient GPU memory bandwidth (M1 Pro or better recommended)
-
-## Architecture
-
+```bash
+python list-midi-ports.py
 ```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│ MIDI Input   │────>│  demo_mlx.py     │────>│ MIDI Output      │
-│ (keyboard or │     │                  │     │ (IAC Driver)     │
-│  MIDI file)  │     │  Aria 0.7B model │     │       │          │
-└─────────────┘     │  MLX on Apple    │     └───────┼──────────┘
-                     │  Silicon         │             │
-                     └──────────────────┘             v
-                                              ┌─────────────────┐
-                                              │ Audio Engine     │
-                                              │ (Ableton Live /  │
-                                              │  FluidSynth)    │
-                                              └────────┬────────┘
-                                                       │
-                                                       v
-                                                   Speakers
-```
+
+Do not bypass this unless you are intentionally testing loopback behavior.
+
+### `CASIO USB-MIDI` does not appear
+
+Check:
+
+1. The keyboard is powered on
+2. The USB cable is connected directly or through a working hub
+3. The device appears in `Audio MIDI Setup.app`
+4. The device appears in `python list-midi-ports.py`
+
+### The fresh repo crashes with missing tokenizer config
+
+The wrappers now copy a compatibility config automatically. If you are running `demo_mlx.py` directly, make sure this file exists:
+
+- `demo/demo-tokenizer-config.json`
+
+### File mode works but live mode does not
+
+That usually means:
+
+- output routing is correct
+- the updated checkpoint is good
+- but your live MIDI input device is still not available to CoreMIDI
+
+That is a hardware or OS routing problem, not a decoding-quality problem.
+
+## Notes
+
+- The earlier sparse, pedal-heavy outputs were not representative of the current updated checkpoint.
+- For quality checks, use the fresh upstream file-demo path first.
+- Once that sounds good, move to the live keyboard path.

@@ -21,6 +21,9 @@ set -euo pipefail
 # --- Paths ------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_ARIA_DIR="${ARIA_DIR:-}"
+ENV_MIDI_OUT="${MIDI_OUT:-}"
+ENV_CHECKPOINT="${CHECKPOINT:-}"
 
 # --- Load config -------------------------------------------------------------
 
@@ -31,9 +34,20 @@ if [ ! -f "${SCRIPT_DIR}/config.sh" ]; then
 fi
 source "${SCRIPT_DIR}/config.sh"
 
-ARIA_DIR="${ARIA_DIR:?Set ARIA_DIR in config.sh}"
-CHECKPOINT="${SCRIPT_DIR}/checkpoints/model-demo.safetensors"
+ARIA_DIR="${ENV_ARIA_DIR:-${ARIA_DIR:?Set ARIA_DIR in config.sh}}"
+MIDI_OUT="${ENV_MIDI_OUT:-${MIDI_OUT:-}}"
+CHECKPOINT="${ENV_CHECKPOINT:-}"
 MIDI_FILE="${1:-${ARIA_DIR}/example-prompts/waltz.mid}"
+COMPAT_TOKENIZER_CONFIG="${SCRIPT_DIR}/compat/demo-tokenizer-config.json"
+TARGET_TOKENIZER_CONFIG="${ARIA_DIR}/demo/demo-tokenizer-config.json"
+
+if [ -z "${CHECKPOINT}" ]; then
+    if [ -f "${ARIA_DIR}/model-demo.safetensors" ]; then
+        CHECKPOINT="${ARIA_DIR}/model-demo.safetensors"
+    else
+        CHECKPOINT="${SCRIPT_DIR}/checkpoints/model-demo.safetensors"
+    fi
+fi
 
 # --- Preflight checks -------------------------------------------------------
 
@@ -48,14 +62,29 @@ if [ ! -f "${MIDI_FILE}" ]; then
     exit 1
 fi
 
-# --- Run --------------------------------------------------------------------
+if [ ! -x "${ARIA_DIR}/.venv/bin/python3" ] && [ ! -x "${SCRIPT_DIR}/.venv/bin/python3" ]; then
+    echo "Error: no usable Python environment found."
+    echo "  Expected either ${ARIA_DIR}/.venv/bin/python3 or ${SCRIPT_DIR}/.venv/bin/python3"
+    exit 1
+fi
 
-source "${SCRIPT_DIR}/.venv/bin/activate"
+if [ -x "${ARIA_DIR}/.venv/bin/python3" ]; then
+    PYTHON_BIN="${ARIA_DIR}/.venv/bin/python3"
+else
+    PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python3"
+fi
+
+if [ ! -f "${TARGET_TOKENIZER_CONFIG}" ]; then
+    echo "Installing compatibility tokenizer config into ${TARGET_TOKENIZER_CONFIG}"
+    cp "${COMPAT_TOKENIZER_CONFIG}" "${TARGET_TOKENIZER_CONFIG}"
+fi
+
+# --- Run --------------------------------------------------------------------
 
 # --- Pick MIDI port (interactive if not preset in config.sh) -----------------
 
 PICK="${SCRIPT_DIR}/pick-midi-port.py"
-MIDI_OUT=$(python "${PICK}" output "${MIDI_OUT:-}")
+MIDI_OUT=$("${PYTHON_BIN}" "${PICK}" output "${MIDI_OUT:-}")
 
 echo ""
 echo "============================================"
@@ -70,7 +99,7 @@ echo "  You should hear piano if your routing is correct."
 echo "  Press Ctrl+C to stop."
 echo ""
 
-python "${ARIA_DIR}/demo/demo_mlx.py" \
+"${PYTHON_BIN}" "${ARIA_DIR}/demo/demo_mlx.py" \
     --checkpoint "${CHECKPOINT}" \
     --midi_out "${MIDI_OUT}" \
     --midi_path "${MIDI_FILE}" \

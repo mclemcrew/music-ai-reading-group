@@ -25,7 +25,7 @@ fi
 source "${SCRIPT_DIR}/config.sh"
 
 ARIA_DIR="${ARIA_DIR:?Set ARIA_DIR in config.sh}"
-CHECKPOINT="${SCRIPT_DIR}/checkpoints/model-demo.safetensors"
+CHECKPOINT="${SCRIPT_DIR}/checkpoints/model-gen.safetensors"
 SWEEP_DIR="${SCRIPT_DIR}/recordings/sweep"
 GENERATOR="${SCRIPT_DIR}/sweep_generate.py"
 
