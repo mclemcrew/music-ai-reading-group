@@ -20,8 +20,8 @@ export function setupCanvas(canvas: HTMLCanvasElement): CanvasSetup {
 }
 
 export const CANVAS_BG = '#ffffff';
-export const CANVAS_GRID = 'rgba(0,0,0,0.08)';
-export const CANVAS_LABEL = 'rgba(0,0,0,0.38)';
+export const CANVAS_GRID = 'rgba(0,0,0,0.1)';
+export const CANVAS_LABEL = 'rgba(31,29,27,0.78)';
 
 /**
  * Returns a scaled font string for canvas drawing.
@@ -31,7 +31,7 @@ export const CANVAS_LABEL = 'rgba(0,0,0,0.38)';
 export function canvasFont(w: number, size: number, weight = ''): string {
 	const scale = Math.max(0.65, Math.min(1.2, w / 900));
 	const px = Math.max(8, Math.round(size * scale));
-	return `${weight ? weight + ' ' : ''}${px}px "DM Mono", monospace`;
+	return `${weight ? weight + ' ' : ''}${px}px "Quicksand", system-ui, sans-serif`;
 }
 
 /**

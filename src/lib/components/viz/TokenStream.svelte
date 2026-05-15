@@ -254,7 +254,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.65rem;
 		color: var(--text-muted);
 		flex-wrap: wrap;

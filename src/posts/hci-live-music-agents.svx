@@ -1,0 +1,254 @@
+---
+title: "HCI of Live Music Agents"
+subtitle: "Design spaces, aesthetic expectations, and what AI is actually allowed to sound like on stage"
+date: "2026-04-23"
+authors: ["Music AI Reading Group"]
+tags: ["hci", "live-music", "design-space", "aesthetics", "hauntology", "agent", "instrument"]
+description: "Two papers that step back from architecture and ask different questions: how should we map the space of live music agents (Kim et al.), and how do cultural expectations about what AI 'should sound like' actively shape the systems we build (Pelinski, Melbye, McPherson)?"
+published: true
+badge: "music-ai-reading-group"
+---
+
+<script>
+	import DesignSpaceAxes from '$lib/components/viz/DesignSpaceAxes.svelte';
+	import AestheticPositioning from '$lib/components/viz/AestheticPositioning.svelte';
+	import ToolInstrumentAgent from '$lib/components/viz/ToolInstrumentAgent.svelte';
+	import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
+	import Callout from '$lib/components/ui/Callout.svelte';
+</script>
+
+## Two papers, both stepping back
+
+The previous weeks were architecture-heavy: how the model fuses audio with text, how it predicts the next token, how it stays under the latency budget. This week is an HCI week, and the two papers do something the others don't. They stop asking how to build the thing and start asking what kind of thing is even being built, and for whom.
+
+The first paper, *A Design Space for Live Music Agents* (Kim, Brade, Wang, Zhou, Kim, Wang, Lee, Flores Garcia, Huang, Donahue, 2026), maps the territory. The authors survey 184 live music agent systems across HCI, AI, and computer music venues, and propose a unified design space that names the dimensions everyone has been navigating implicitly: what the agent listens to, what it can do, how musicians control it, what it puts back into the room. The map is the contribution, and it's the kind of paper that should have existed two years ago.
+
+The second paper, *When AI don't sound like AI* (Pelinski, Melbye, McPherson, 2026, *Organised Sound*), zooms way in. The authors reconstruct a single project of theirs, *Surfing Hyperparameters* (a duo performance system), and use it to argue that aesthetic expectations are not consequences of the technology but active *inputs* to it. The story we tell ourselves about what AI should sound like ends up shaping the system we build, regardless of what the system would have produced on its own.
+
+Read together, the two papers cover a useful arc. Kim et al. give us the geometry of the field. Pelinski et al. remind us that everyone moving through that geometry is being pushed around by cultural expectations they may or may not have noticed.
+
+## A few primers before the deep dives
+
+The first three primers below are about how this week's papers *frame* live-music AI. The fourth is about a specific philosophical move (*hauntology*) that the Pelinski paper leans on heavily and that some readers will not have seen before.
+
+<div class="concepts">
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Three boxes on a spectrum line -->
+				<line x1="10" y1="40" x2="90" y2="40" stroke="#dde0e6" stroke-width="1"/>
+				<rect x="10" y="32" width="20" height="16" rx="2" stroke="#9ca3af" stroke-width="1" opacity="0.7"/>
+				<text x="20" y="42" text-anchor="middle" fill="#9ca3af" font-size="6" font-family="Quicksand, system-ui, sans-serif">tool</text>
+				<rect x="40" y="32" width="20" height="16" rx="2" stroke="#1a9e8f" stroke-width="1.2" opacity="0.85"/>
+				<text x="50" y="42" text-anchor="middle" fill="#1a9e8f" font-size="6" font-family="Quicksand, system-ui, sans-serif">instrument</text>
+				<rect x="70" y="32" width="20" height="16" rx="2" stroke="#7c4dff" stroke-width="1.2" opacity="0.85"/>
+				<text x="80" y="42" text-anchor="middle" fill="#7c4dff" font-size="6" font-family="Quicksand, system-ui, sans-serif">agent</text>
+				<text x="50" y="62" text-anchor="middle" fill="#9ca3af" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">explicit control → latent agency → intentional behavior</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--violet)">Tool, instrument, agent: a spectrum</h4>
+			<p>The Kim et al. paper inherits a long-running argument from NIME and HCI: an AI music system can sit anywhere on a continuum between <em>tool</em> (every output is explicitly chosen by the musician), <em>instrument</em> (the musician shapes behavior through performance, but the system contributes choices within its learned model), and <em>agent</em> (the system perceives context and adapts strategy mid-performance). Most current systems live ambiguously between tool and instrument, and almost none cleanly clear the bar for "agent" in the AI sense. The label a designer picks for their own system constrains the questions they ask about it.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- arrow from "expectation" pointing INTO design box -->
+				<rect x="38" y="22" width="32" height="28" rx="3" stroke="#7c4dff" stroke-width="1.2" opacity="0.85"/>
+				<text x="54" y="34" text-anchor="middle" fill="#7c4dff" font-size="6" font-family="Quicksand, system-ui, sans-serif">design</text>
+				<text x="54" y="42" text-anchor="middle" fill="#7c4dff" font-size="6" font-family="Quicksand, system-ui, sans-serif">decisions</text>
+				<text x="14" y="20" fill="#e07020" font-size="6" font-family="Quicksand, system-ui, sans-serif">expectation</text>
+				<line x1="14" y1="24" x2="36" y2="32" stroke="#e07020" stroke-width="1" opacity="0.8"/>
+				<polygon points="33,30 37,32 33,34" fill="#e07020" opacity="0.8"/>
+				<text x="14" y="58" fill="#e07020" font-size="6" font-family="Quicksand, system-ui, sans-serif">narrative</text>
+				<line x1="14" y1="56" x2="36" y2="44" stroke="#e07020" stroke-width="1" opacity="0.8"/>
+				<polygon points="33,42 37,44 33,46" fill="#e07020" opacity="0.8"/>
+				<text x="50" y="62" text-anchor="middle" fill="#9ca3af" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">stories shape the artifact</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--orange)">Aesthetic expectations are inputs</h4>
+			<p>The Pelinski paper's central move is to argue that the cultural narratives we hold about AI music (what it should sound like, what it conjures up, who it's haunted by) actively shape the design choices we make. These narratives aren't retrospective descriptions of what the technology produced; they're upstream constraints we keep applying to the technology. The example in the paper is their own: while developing <em>Surfing Hyperparameters</em>, the team kept narrating their system's outputs in ways that confirmed expectations they'd held since the start. "Sounding like AI" wasn't an emergent property of the system. It was the brief.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Cross of axes -->
+				<line x1="50" y1="8" x2="50" y2="64" stroke="#dde0e6" stroke-width="1"/>
+				<line x1="8" y1="36" x2="92" y2="36" stroke="#dde0e6" stroke-width="1"/>
+				<text x="50" y="6" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">capability</text>
+				<text x="6" y="38" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">input</text>
+				<text x="93" y="38" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif" text-anchor="end">interaction</text>
+				<text x="50" y="70" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">output</text>
+				<!-- Scattered dots = systems -->
+				<circle cx="32" cy="22" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="68" cy="18" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="40" cy="50" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="64" cy="44" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="74" cy="56" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="22" cy="40" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="56" cy="28" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="82" cy="32" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<circle cx="36" cy="60" r="2" fill="#1a9e8f" opacity="0.8"/>
+				<text x="50" y="14" text-anchor="middle" fill="#9ca3af" font-size="4.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.6">184 systems</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--teal)">A design space, not a leaderboard</h4>
+			<p>Most AI-music papers compare systems on a small set of metrics and pick a winner. The Kim et al. paper deliberately doesn't do that. The point of a design space is that there's no single "best" location in it; different cells make sense for different performers, contexts, and traditions. By plotting 184 systems across several axes (musical input, agent capability, interaction modality, output representation, alongside contextual axes like usage and ecosystem), the authors show <em>where</em> systems cluster and <em>where</em> the empty regions are. The empty regions are part of the contribution.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Stylized "ghost" shape: a wavy outline -->
+				<path d="M30 20 Q30 12 40 12 L60 12 Q70 12 70 20 L70 50 Q70 56 65 56 Q62 56 60 53 Q58 56 55 56 Q52 56 50 53 Q48 56 45 56 Q42 56 40 53 Q38 56 35 56 Q30 56 30 50 Z" stroke="#7c4dff" stroke-width="1" opacity="0.6" fill="none"/>
+				<!-- Echo shadow -->
+				<path d="M34 24 Q34 16 44 16 L64 16 Q74 16 74 24 L74 54 Q74 60 69 60 Q66 60 64 57 Q62 60 59 60 Q56 60 54 57 Q52 60 49 60 Q46 60 44 57 Q42 60 39 60 Q34 60 34 54 Z" stroke="#9ca3af" stroke-width="0.6" opacity="0.4" fill="none" stroke-dasharray="2 2"/>
+				<text x="50" y="68" text-anchor="middle" fill="#9ca3af" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">presence haunted by what it isn't</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--violet)">Hauntology, briefly</h4>
+			<p>The Pelinski paper invokes <em>sonic hauntology</em>, Mark Fisher's reading of Derrida, to explain the cultural background hum behind "AI music sounding like AI." The idea is that any present moment is constituted by the traces of pasts that didn't fully arrive: futures that never happened, recordings that decayed, voices already absent. AI music inherits this directly because it literally <em>is</em> a recombination of archived recordings ("plundered datasets resituated in different contexts," in the paper's words). When listeners describe AI output as ghostly or uncanny, that isn't an accident of the model. It's the cultural frame doing work. We hear hauntology before we hear the audio.</p>
+		</div>
+	</div>
+</div>
+
+The tool, instrument, agent distinction is the most-cited framing in this week's papers, so it's worth making concrete. The interactive below switches between the three modes and shows what changes about how control flows between musician and system.
+
+<ToolInstrumentAgent />
+
+The three modes don't differ in technology. They differ in *who initiates*. A tool waits for the musician to commit. An instrument trades signals continuously. An agent has an internal loop of its own that can lead. By the Kim et al. paper's bar, almost nothing in current AI music actually clears the agent threshold; most "AI music agents" are sophisticated instruments with very strong priors. That isn't a failure mode, but it's a useful thing to know about the field's actual position.
+
+## A design space for 184 live music agents
+
+Kim et al.'s contribution is conceptual. They surveyed 184 systems explicitly designed for live music interaction (real-time exchange with a human performer, not offline composition or passive listening) drawn from CHI, NIME, ICML, arXiv, and adjacent venues, spanning roughly the last two decades with heavy weight on the 2020 to 2026 window. The systems are catalogued along design-space dimensions covering what the agent listens to (audio, symbolic, gestural, contextual signals), what it can do (accompaniment, continuation, real-time transcription, harmonization, sound-design assistance), how the musician communicates with it (real-time MIDI, audio input, gestures, latency budgets), and what it produces (audio synthesis, symbolic streams, control signals to other instruments). The framing extends beyond the obvious technical axes to include usage context, ecosystem, and the social setting around a performance.
+
+<DesignSpaceAxes />
+
+The map shows clusters and gaps. Most systems sit on the audio-input / audio-output diagonal, which is partly a tooling artifact: audio is what's easy to capture and synthesize, and audio-only systems compose cleanly with the rest of the music technology stack. Symbolic and gestural inputs are sparser. Real-time *symbolic* generation is sparser still; low-latency models tend to be audio-domain, and the symbolic-domain models that exist are mostly offline. Cross-modal agents (listen with audio, respond symbolically; listen with gesture, respond with parameter automation) are largely empty cells.
+
+Two further gaps the authors flag explicitly. First, *cultural and genre diversity*: training data is dominated by Western classical and jazz traditions, with most systems implicitly inheriting those tonal and rhythmic priors. Second, *long-form coherence*: the field optimizes hard for short-horizon objectives (the next bar, the next phrase), but live music as practiced runs on much longer arcs of tension and release. Few systems are evaluated for what they do across an entire performance.
+
+<Callout type="insight">
+	The paper's deepest move is to refuse a leaderboard. It doesn't say "system X beats system Y on metric Z." It says "here are the cells of the space, here are the systems in each cell, here are the empty cells." That reframe is what lets the field talk to itself coherently.
+</Callout>
+
+A few specific framings the paper makes load-bearing. The "agent" label is reserved for systems that show *intentional behavior*, meaning systems that adapt strategy mid-performance in response to context, rather than just emitting stochastic output. By that bar, very few current systems are agents; most are sophisticated instruments. The paper doesn't treat that as a failure. It treats it as a finding about where the field actually is, which is useful to know before claiming to be building something else.
+
+The unaddressed-but-implicit question, which Pelinski et al. take up next, is *how* a designer ends up at one cell rather than another. The map shows where systems are. It doesn't say much about why they got there.
+
+## Surfing Hyperparameters: when the story shapes the sound
+
+Pelinski, Melbye, and McPherson's paper is structurally different. Where Kim et al. survey, Pelinski et al. autoethnograph. They take a single project, *Surfing Hyperparameters* (a performance system Pelinski and Melbye built around a modified double bass called the FAAB, the feedback-actuated augmented bass), and reconstruct, over several years, how cultural narratives about what AI music should sound like repeatedly steered design decisions in particular directions.
+
+The setup is technically grounded. The FAAB has eight piezo contact microphones distributed across the body of the instrument, each capturing a subtly different vibrational signature. Those eight signals feed a Transformer-based autoencoder running on a Bela microprocessor that compresses the input to four latent dimensions. Those four dimensions then drive a modular synthesis chain (Eurorack hardware via the pybela bridge) using a Multi-Scale Spectral Difference (MSSD) sonification scheme that translates latent-space motion into sound. Eight model variations were trained with different hyperparameters, and the team deliberately kept suboptimal versions in the rotation as distinct "sound worlds" rather than collapsing to a single best autoencoder. Performance involved navigating between these models on stage, treating each as a different inhabitable region of the design space.
+
+So far the paper reads like a NIME paper. The contribution comes from what they noticed *while* doing this. From the paper:
+
+> The stories practitioners tell while building and making music with technology are performative, constructing rather than merely describing aesthetic realities.
+
+The argument leans on Lucy Suchman, Bruno Latour, Donna Haraway, and Sharon Traweek. Narratives don't passively report what happened; they actively produce it. During development, one author observed that the system exhibited "aesthetically indefensible" switching behavior between models, a technical problem by their own framing, and yet they found it "engaging to listen to." Faced with that contradiction, the post-hoc story they ended up telling justified the sonic outcome through the AI framing, even where the technical reality didn't quite support it. The MSSD output in the final system, the paper notes, "was not dissimilar to what they imagined the models to sound like when the project was initiated." Initial expectations shaped final aesthetic satisfaction.
+
+<AestheticPositioning />
+
+The cultural background hum is *sonic hauntology*. The paper traces a chain of associations the broader culture brings to AI music: the ghost-in-the-machine trope, the spectral aesthetics of degraded analogue media, the framing of AI as archival haunting (datasets as plundered recordings, resituated in new contexts). These associations, the authors argue, are "conceptual rather than based on a sonic aesthetic," meaning they'd be applied regardless of what the system actually sounded like. AI sound becomes uncanny because we've already decided it should be.
+
+<Callout type="aside">
+	This is not a paper that says we should make AI sound less ghostly. It's a paper that says: notice when chasing ghostliness is on purpose, and notice when calling something ghostly is the cultural frame doing it for us.
+</Callout>
+
+The practical moves the authors recommend are about transparency, not aesthetics. Document expectations, not just developments. Acknowledge mismatches between intended and actual behavior rather than papering over them with conceptual ambiguity (they invoke the *Clever Hans* effect, where a system appears to do something it doesn't). Recognize that both technical constraints and cultural narratives shape outcomes; neither operates alone. And practice transparency about the gap between the story and the artifact, so the project as documented matches the project as built.
+
+## Mapping Pelinski onto Kim
+
+The two papers don't reference each other, but they sit next to each other naturally. The Kim et al. design space tells us where in the territory we are. The Pelinski paper tells us why we might be there.
+
+A sample reading: *Surfing Hyperparameters* sits in a sparsely-populated cell of the Kim map (instrument-domain input from the augmented double bass, continuous low-dimensional latent control over four dims, audio-domain output via modular synthesis, an instrument-rather-than-tool framing, and a live-performance context). By the Kim taxonomy, that cell is fertile and largely empty. By the Pelinski critique, the *reason* a project ends up in that cell is partly the technology and partly the cultural narrative the team brought into the room. A team that comes in expecting to build something hauntological will tend to inhabit cells where hauntological readings are easy.
+
+That tension generalizes. Wherever the Kim map is empty, the empty region might be empty because the technology can't reach it yet, or because the cultural narratives that motivate the field don't currently make that region desirable. Disentangling those two reasons is hard, and the Kim paper doesn't pretend to. The Pelinski paper offers some methodological grip on the problem: examine the narratives, document the expectations, and separate the story from the artifact. Doing that paper-by-paper would make the design space more honest over time.
+
+## Open questions
+
+A few discussion prompts we ended up with prepping this session:
+
+- We're unsure whether the tool / instrument / agent spectrum is useful for design or only descriptive after the fact. Could a team commit to building an "agent" rather than an "instrument" up front, and have that decision actually shape their training objective?
+- Both papers gesture at long-form coherence as under-explored. We don't have a good answer for what even counts as evaluation for a system that's supposed to play across thirty minutes of a live set; most metrics in current use are window-of-bars metrics.
+- Pelinski et al. argue that aesthetic expectations are inputs to the design process rather than consequences of it. Whether that's resistible is unclear. A music AI system with no prior aesthetic narrative might still be a stylistic choice in disguise (free-jazz minimalism, Cagean indeterminacy, and so on).
+- The Kim design space catalogues 184 systems but doesn't grade them against each other. That refusal is load-bearing for the framing, but it makes the paper hard to use prescriptively. We're not sure what concrete advice the paper would give a new team designing a system from scratch.
+- We didn't have time in the session to map this reading group's other papers (LTU, LLark, AudioChat, Aria-Duet, ReaLJam, the LLM-FX papers from Week 7) onto the Kim design space, but that's a useful whiteboard exercise.
+
+## Papers & resources
+
+<div class="resources-grid">
+	<ResourceLink href="https://www.cambridge.org/core/journals/organised-sound/article/when-ai-dont-sound-like-ai-negotiating-aesthetic-expectations-in-technologymediated-musical-practice/58E74C59A151F4BA0F289CEA22B9D1FE" category="Paper · Apr 2026" categoryType="paper" label="When AI don't sound like AI: Negotiating aesthetic expectations in technology-mediated musical practice" host="Pelinski, Melbye, McPherson · Organised Sound" />
+	<ResourceLink href="https://arxiv.org/abs/2602.05064" category="Paper · 2026" categoryType="paper" label="A Design Space for Live Music Agents" host="Kim, Brade, Wang, Zhou, Donahue et al." />
+	<ResourceLink href="https://arxiv.org/abs/2309.11000" category="Paper · NIME 2023" categoryType="paper" label="Pybela: Bridging Bela and Python for Real-Time Audio Machine Learning" host="Pelinski et al." />
+	<ResourceLink href="https://k-fisher.com/the-metaphysics-of-crackle-afrofuturism-and-hauntology/" category="Essay · 2013" categoryType="paper" label="The Metaphysics of Crackle: Afrofuturism and Hauntology" host="Mark Fisher" />
+	<ResourceLink href="https://www.sciencedirect.com/topics/computer-science/clever-hans-effect" category="Reference" categoryType="paper" label="Clever Hans Effect (background reading)" host="ScienceDirect overview" />
+</div>
+
+## Demos & systems referenced
+
+<div class="resources-grid">
+	<ResourceLink href="https://teresapelinski.com/surfing-hyperparameters" category="Project page" categoryType="demo" label="Surfing Hyperparameters" host="teresapelinski.com" />
+	<ResourceLink href="https://github.com/pelinski/pybela" category="Code" categoryType="tool" label="pybela: Bela ↔ Python bridge" host="github.com/pelinski" />
+	<ResourceLink href="https://bela.io" category="Hardware" categoryType="tool" label="Bela (low-latency audio platform used by FAAB)" host="bela.io" />
+	<ResourceLink href="https://github.com/mclemcrew/music-ai-reading-group" category="Code · Examples" categoryType="tool" label="Reading Group Repo" host="github.com/mclemcrew" />
+</div>
+
+<style>
+	.concepts {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		margin: 1.5rem 0;
+	}
+
+	.concept-row {
+		display: grid;
+		grid-template-columns: 200px 1fr;
+		gap: 1.25rem;
+		align-items: start;
+	}
+
+	.concept-figure {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		padding: 0.5rem;
+	}
+
+	.concept-figure svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.concept-text h4 {
+		margin: 0 0 0.4rem;
+		font-size: 0.95rem;
+		font-weight: 600;
+	}
+
+	.concept-text p {
+		margin: 0;
+		font-size: 0.92rem;
+		line-height: 1.55;
+	}
+
+	@media (max-width: 640px) {
+		.concept-row {
+			grid-template-columns: 1fr;
+		}
+		.concept-figure {
+			max-width: 280px;
+		}
+	}
+</style>

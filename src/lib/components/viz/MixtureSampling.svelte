@@ -105,7 +105,7 @@
 			ctx.fillText(ds.name, cx, padY + innerH + 14);
 
 			// Hours label
-			ctx.fillStyle = ds.highResource ? 'rgba(26,158,143,0.4)' : 'rgba(224,112,32,0.4)';
+			ctx.fillStyle = ds.highResource ? 'rgba(20,124,112,0.85)' : 'rgba(192,93,22,0.85)';
 			ctx.font = canvasFont(w, 11);
 			ctx.fillText(ds.hours + 'h', cx, padY + innerH + 24);
 		});
@@ -157,9 +157,9 @@
 <VizPanel title="Temperature-Weighted Mixture Sampling" titleColor="var(--orange)">
 	{#snippet controls()}
 		<label class="slider-label">
-			<span class="mono">τ</span>
+			<span>τ</span>
 			<input type="range" min="0.05" max="1.0" step="0.01" bind:value={tau} oninput={onTauInput} />
-			<span class="mono val">{tau.toFixed(2)}</span>
+			<span class="val">{tau.toFixed(2)}</span>
 		</label>
 		<div class="legend">
 			<span class="dot hi"></span><span>high-resource</span>
@@ -182,7 +182,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.75rem;
 		color: var(--text-muted);
 	}
@@ -214,7 +214,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.65rem;
 		color: var(--text-muted);
 	}

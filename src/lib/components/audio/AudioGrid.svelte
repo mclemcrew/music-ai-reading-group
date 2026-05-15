@@ -96,7 +96,7 @@
 		padding: 2rem;
 		text-align: center;
 		color: var(--text-muted);
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.85rem;
 	}
 

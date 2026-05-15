@@ -56,7 +56,7 @@
 
 	.viz-header h3 {
 		margin: 0;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.9rem;
 		font-weight: 500;
 	}
@@ -82,7 +82,7 @@
 		border-top: 1px solid var(--border);
 		font-size: 0.8rem;
 		color: var(--text-muted);
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 	}
 
 	@container viz (max-width: 500px) {

@@ -1,514 +1,679 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
-	import { papers, clusters } from '$lib/data/papers';
-	import { computeLayout } from '$lib/data/paper-layout';
-	import Constellation from '$lib/components/network/Constellation.svelte';
-	import PaperSheet from '$lib/components/network/PaperSheet.svelte';
+	import { animate, stagger } from 'animejs';
+	import { sessions, findPaper, type TopicColor } from '$lib/data/sessions';
 
-	// Logical viewBox for the constellation. 1000x1000 keeps integer-friendly coordinates.
-	const viewBox = { w: 1000, h: 1000 };
+	let listRef: HTMLElement | undefined = $state();
 
-	// Layout is pure — recomputed whenever the papers/clusters data changes.
-	const layout = computeLayout(papers, clusters, viewBox);
+	// Newest first for display.
+	const ordered = [...sessions].reverse();
 
-	// State
-	let selectedId = $state<string | null>(null);
-	let scrollStep = $state(0);
-	let tourDone = $state(false);
+	// Filter axes.
+	let activeTopics = $state<string[]>([]);
+	let activeYears = $state<number[]>([]);
+	let onlyNotes = $state(false);
 
-	// Sorted cluster list used for the tour sequence and derived state.
-	const sortedClusters = [...clusters].sort((a, b) => a.order - b.order);
+	// Unique chips, derived from data so they stay in sync as sessions are added.
+	const topicChips: { topic: string; color: TopicColor }[] = (() => {
+		const seen = new Map<string, TopicColor>();
+		for (const s of sessions) if (!seen.has(s.topic)) seen.set(s.topic, s.topicColor);
+		return [...seen].map(([topic, color]) => ({ topic, color }));
+	})();
 
-	// Build the full list of step contents: overview + one per cluster + release.
-	type StepContent = {
-		num: string;
-		title: string;
-		body: string;
-		clusterId: string | null;
-		colorVar: string | null;
-	};
-	const stepContents: StepContent[] = [
-		{
-			num: '01',
-			title: "The papers we've read",
-			body:
-				"Every paper the reading group has covered so far, arranged by theme. Scroll to walk through each cluster, then tap any node to read more.",
-			clusterId: null,
-			colorVar: null
-		},
-		...sortedClusters.map((c, i) => ({
-			num: String(i + 2).padStart(2, '0'),
-			title: c.label,
-			body: c.blurb,
-			clusterId: c.id,
-			colorVar: c.colorVar
-		})),
-		{
-			num: String(sortedClusters.length + 2).padStart(2, '0'),
-			title: 'Explore',
-			body:
-				"Tap any paper to see what we took from it, who wrote it, and where to read more. The constellation grows each week as the group reads new work.",
-			clusterId: null,
-			colorVar: null
-		}
-	];
+	const yearChips: number[] = [...new Set(sessions.flatMap((s) => s.papers.map((p) => p.year)))]
+		.sort((a, b) => b - a);
 
-	// Derived: while the tour is running, focus the cluster for the current step.
-	let focusedClusterId = $derived.by(() => {
-		if (selectedId || tourDone) return null;
-		return stepContents[scrollStep]?.clusterId ?? null;
+	function toggle<T>(arr: T[], value: T): T[] {
+		return arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value];
+	}
+
+	const filteredSessions = $derived.by(() => {
+		return ordered
+			.map((session) => {
+				const papers = session.papers.filter((p) => {
+					if (activeTopics.length > 0 && !activeTopics.includes(session.topic)) return false;
+					if (activeYears.length > 0 && !activeYears.includes(p.year)) return false;
+					if (onlyNotes && !p.hasPost) return false;
+					return true;
+				});
+				return { ...session, papers };
+			})
+			.filter((s) => s.papers.length > 0);
 	});
 
-	// Derived sheet data
-	let selectedPaper = $derived(
-		selectedId ? (papers.find((p) => p.id === selectedId) ?? null) : null
-	);
-	let selectedCluster = $derived(
-		selectedPaper ? (clusters.find((c) => c.id === selectedPaper!.clusterId) ?? null) : null
+	const visibleCounts = $derived.by(() => {
+		const sCount = filteredSessions.length;
+		const pCount = filteredSessions.reduce((n, s) => n + s.papers.length, 0);
+		return { sessions: sCount, papers: pCount };
+	});
+
+	const filtersActive = $derived(
+		activeTopics.length > 0 || activeYears.length > 0 || onlyNotes
 	);
 
-	// Current step content for the mobile overlay card
-	let currentStep = $derived(stepContents[scrollStep] ?? stepContents[0]);
-
-	function closeSheet() {
-		selectedId = null;
+	function clearFilters() {
+		activeTopics = [];
+		activeYears = [];
+		onlyNotes = false;
 	}
 
-	function replayTour() {
-		const intro = document.getElementById('tour-anchor');
-		if (intro) {
-			tourDone = false;
-			scrollStep = 0;
-			intro.scrollIntoView({ behavior: 'smooth', block: 'start' });
-		}
-	}
-
-	// scrollama integration
-	onMount(async () => {
-		if (typeof window === 'undefined') return;
-		const scrollama = (await import('scrollama')).default;
-
-		const scroller = scrollama();
-		scroller
-			.setup({
-				step: '.scroll-trigger',
-				offset: 0.5,
-				debug: false
-			})
-			.onStepEnter((response) => {
-				const idx = Number(response.element.dataset.step);
-				scrollStep = idx;
-				if (response.element.dataset.final === 'true') {
-					tourDone = true;
-				} else if (idx < stepContents.length - 1) {
-					tourDone = false;
-				}
-			});
-
-		const onResize = () => scroller.resize();
-		window.addEventListener('resize', onResize);
-
-		return () => {
-			window.removeEventListener('resize', onResize);
-			scroller.destroy();
-		};
+	onMount(() => {
+		const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		if (reduced || !listRef) return;
+		animate(listRef.querySelectorAll('.session-card'), {
+			translateY: [20, 0],
+			opacity: [0, 1],
+			delay: stagger(70, { start: 100 }),
+			duration: 550,
+			ease: 'outExpo'
+		});
 	});
 </script>
 
 <svelte:head>
-	<title>Paper Constellation · Music AI Reading Group</title>
+	<title>Papers — Music AI Reading Group</title>
 	<meta
 		name="description"
-		content="An interactive map of every paper the Music AI Reading Group has read, clustered by theme."
+		content="Every paper the Music AI Reading Group has worked through, filterable by topic, year, and whether we wrote up notes."
 	/>
 </svelte:head>
 
-<div class="papers-nav">
+<section class="container page-header">
 	<a href="{base}/" class="back-link">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 			<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
 		</svg>
-		Back
+		Back to reading log
 	</a>
-</div>
-
-<div class="papers-intro">
-	<h1>Paper Constellation</h1>
-	<p class="subtitle">
-		Every paper we've read, clustered by theme. Scroll to take the tour, then tap any node to read
-		more.
+	<h1>Papers</h1>
+	<p class="lede">
+		Every paper we've worked through, newest first. Filter by topic, year, or whether we wrote up notes.
 	</p>
-</div>
+</section>
 
-<!-- Scrollytelling section: sticky graphic + parallel scroll triggers -->
-<section id="tour-anchor" class="tour-section">
-	<!-- Graphic column: sticky on both mobile and desktop -->
-	<div class="graphic-col">
-		<div class="graphic-sticky">
-			<div class="constellation-box">
-				<Constellation
-					{papers}
-					{clusters}
-					{layout}
-					bind:selectedId
-					{focusedClusterId}
-					{viewBox}
-				/>
-			</div>
-			<!-- Mobile-only step overlay: shows the active step card floating at the bottom of the graphic -->
-			<div
-				class="mobile-step-overlay"
-				class:tour-done={tourDone}
-				style:--cluster-color={currentStep.colorVar
-					? `var(${currentStep.colorVar})`
-					: 'var(--orange)'}
-			>
-				<div class="step-card">
-					<span class="step-num">{currentStep.num}</span>
-					<h3>{currentStep.title}</h3>
-					<p>{currentStep.body}</p>
-				</div>
-			</div>
+<section class="container filters" aria-label="Filter papers">
+	<div class="filter-row">
+		<span class="filter-label">Topic</span>
+		<div class="chips">
+			{#each topicChips as { topic, color } (topic)}
+				{@const active = activeTopics.includes(topic)}
+				<button
+					type="button"
+					class="chip topic-{color}"
+					class:active
+					aria-pressed={active}
+					onclick={() => (activeTopics = toggle(activeTopics, topic))}
+				>
+					{topic}
+				</button>
+			{/each}
 		</div>
 	</div>
 
-	<!-- Steps column: on desktop these cards are visible in flow; on mobile they're invisible scroll triggers -->
-	<div class="steps-col">
-		{#each stepContents as step, i}
-			<div
-				class="scroll-trigger"
-				data-step={i}
-				data-final={i === stepContents.length - 1 ? 'true' : 'false'}
-			>
-				<div
-					class="step-card desktop-card"
-					style:--cluster-color={step.colorVar ? `var(${step.colorVar})` : 'var(--orange)'}
+	<div class="filter-row">
+		<span class="filter-label">Year</span>
+		<div class="chips">
+			{#each yearChips as year (year)}
+				{@const active = activeYears.includes(year)}
+				<button
+					type="button"
+					class="chip chip-year"
+					class:active
+					aria-pressed={active}
+					onclick={() => (activeYears = toggle(activeYears, year))}
 				>
-					<span class="step-num">{step.num}</span>
-					<h3>{step.title}</h3>
-					<p>{step.body}</p>
-				</div>
-			</div>
-		{/each}
+					{year}
+				</button>
+			{/each}
+		</div>
 	</div>
-</section>
 
-<!-- Free-explore footer -->
-<section class="explore-footer">
-	<p class="explore-hint">
-		{#if tourDone}
-			Explore freely — tap any paper on the map above.
+	<div class="filter-row">
+		<span class="filter-label">Notes</span>
+		<div class="chips">
+			<button
+				type="button"
+				class="chip chip-notes"
+				class:active={onlyNotes}
+				aria-pressed={onlyNotes}
+				onclick={() => (onlyNotes = !onlyNotes)}
+			>
+				<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
+				</svg>
+				Has notes
+			</button>
+			{#if filtersActive}
+				<button type="button" class="chip chip-clear" onclick={clearFilters}>
+					Clear all
+				</button>
+			{/if}
+		</div>
+	</div>
+
+	<p class="filter-count" aria-live="polite">
+		{#if filtersActive}
+			Showing {visibleCounts.papers} {visibleCounts.papers === 1 ? 'paper' : 'papers'}
+			across {visibleCounts.sessions} {visibleCounts.sessions === 1 ? 'session' : 'sessions'}
 		{:else}
-			Scroll through each cluster, or jump to free explore.
+			{visibleCounts.papers} papers across {visibleCounts.sessions} sessions
 		{/if}
 	</p>
-	<button class="replay-btn" onclick={replayTour}>
-		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-			<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-		</svg>
-		Replay tour
-	</button>
 </section>
 
-<!-- SSR-friendly accessible list fallback, hidden when JS hydrates -->
-<noscript>
-	<section class="fallback-list">
-		<h2>All papers (by cluster)</h2>
-		{#each sortedClusters as cluster}
-			{@const members = papers.filter((p) => p.clusterId === cluster.id)}
-			<h3 style:color={`var(${cluster.colorVar})`}>{cluster.label}</h3>
-			<ul>
-				{#each members as p}
-					<li>
-						<a href={p.link} target="_blank" rel="noopener">
-							<strong>{p.title}</strong> — {p.authorsShort}, {p.year}
-						</a>
-						<p>{p.blurb}</p>
-					</li>
-				{/each}
-			</ul>
-		{/each}
-	</section>
-</noscript>
+<section class="container session-list" bind:this={listRef}>
+	{#if filteredSessions.length === 0}
+		<div class="empty">
+			<p>No papers match those filters.</p>
+			<button type="button" class="chip chip-clear" onclick={clearFilters}>Clear filters</button>
+		</div>
+	{/if}
 
-<!-- Paper detail drawer -->
-<PaperSheet paper={selectedPaper} cluster={selectedCluster} onClose={closeSheet} />
+	{#each filteredSessions as session (session.week)}
+		{@const sessionPost = session.papers.find((p) => p.hasPost)?.postSlug}
+		<article class="session-card">
+			<header class="session-meta">
+				<span class="session-week">{session.week}</span>
+				<span class="session-date">{session.date}</span>
+				<span class="topic-badge topic-{session.topicColor}">{session.topic}</span>
+				<div class="session-actions">
+					{#if session.recording}
+						<a href={session.recording.url} target="_blank" rel="noopener" class="recording-btn" title="Passcode: {session.recording.passcode}">
+							<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+							Recording
+						</a>
+					{/if}
+					{#if sessionPost}
+						<a href="{base}/posts/{sessionPost}" class="read-post-btn">
+							Notes
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+						</a>
+					{/if}
+				</div>
+			</header>
+
+			<div class="papers">
+				{#each session.papers as paper (paper.id)}
+					{@const related = (paper.relatedTo ?? [])
+						.map((id) => findPaper(id))
+						.filter((p): p is NonNullable<typeof p> => Boolean(p))}
+					<div class="paper-row" id={paper.id}>
+						<div class="paper-info">
+							<a href={paper.link} target="_blank" rel="noopener" class="paper-title">{paper.title}</a>
+							<div class="paper-meta">
+								<span class="paper-authors">{paper.authors}</span>
+								<span class="paper-year">{paper.year}</span>
+								{#if paper.excalidraw}
+									<a href={paper.excalidraw} target="_blank" rel="noopener" class="slides-link">
+										<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+										Slides
+									</a>
+								{/if}
+							</div>
+							{#if paper.blurb}
+								<p class="paper-blurb">{paper.blurb}</p>
+							{/if}
+							{#if related.length > 0}
+								<div class="related">
+									<span class="related-label">Related</span>
+									{#each related as r (r.id)}
+										<a href="#{r.id}" class="related-pill">{r.title}</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+		</article>
+	{/each}
+</section>
 
 <style>
-	.papers-nav {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 1.25rem 1.5rem 0;
+	.page-header {
+		padding-top: 2.5rem;
+		padding-bottom: 1.25rem;
 	}
 
 	.back-link {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		font-family: var(--font-mono);
-		font-size: 0.78rem;
+		gap: 0.35rem;
+		font-family: var(--font-display);
+		font-size: 0.75rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 		color: var(--text-muted);
 		text-decoration: none;
+		margin-bottom: 1.25rem;
 	}
 
-	.back-link:hover,
-	.back-link:active {
+	.back-link:hover {
 		color: var(--orange);
 		text-decoration: none;
 	}
 
-	.papers-intro {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 2rem 1.5rem 1rem;
-		text-align: center;
+	.page-header h1 {
+		font-size: clamp(2rem, 4vw, 2.6rem);
+		margin-bottom: 0.4rem;
 	}
 
-	.papers-intro h1 {
-		font-family: var(--font-display);
-		font-size: clamp(1.8rem, 4vw, 2.6rem);
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		color: var(--text);
-		margin-bottom: 0.6rem;
-	}
-
-	.papers-intro .subtitle {
-		color: var(--text-muted);
-		font-size: 1rem;
-		font-weight: 300;
-		max-width: 520px;
-		margin: 0 auto;
-	}
-
-	/* ═══════════════════════════════════════════════════
-	   Tour section layout
-	   Mobile-first: single column, sticky graphic on top,
-	   scroll triggers below (invisible on mobile).
-	   Desktop: grid, sticky graphic left, visible cards right.
-	   ═══════════════════════════════════════════════════ */
-	.tour-section {
-		position: relative;
-		max-width: 1200px;
-		margin: 2rem auto 0;
-		padding: 0 1rem;
-	}
-
-	/* ── Graphic column (mobile) ── */
-	.graphic-col {
-		position: relative;
-		z-index: 1;
-	}
-
-	.graphic-sticky {
-		position: sticky;
-		top: 1rem;
-		height: calc(100svh - 2rem);
-		max-height: 720px;
-	}
-
-	.constellation-box {
-		position: relative;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 16px;
-		height: 100%;
-		overflow: hidden;
-	}
-
-	/* Mobile step overlay: floats inside the graphic box at the bottom */
-	.mobile-step-overlay {
-		position: absolute;
-		left: 1rem;
-		right: 1rem;
-		bottom: 1rem;
-		pointer-events: none;
-		z-index: 2;
-		transition: opacity 0.35s ease, transform 0.35s ease;
-	}
-
-	.mobile-step-overlay.tour-done {
-		opacity: 0;
-		transform: translateY(20px);
-	}
-
-	.mobile-step-overlay .step-card {
-		background: rgba(255, 255, 255, 0.93);
-		-webkit-backdrop-filter: blur(14px);
-		backdrop-filter: blur(14px);
-		border: 1px solid var(--border);
-		border-left: 3px solid var(--cluster-color, var(--orange));
-		border-radius: 12px;
-		padding: 1rem 1.2rem;
-		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
-	}
-
-	.step-num {
-		display: block;
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		color: var(--text-muted);
-		letter-spacing: 0.1em;
-		margin-bottom: 0.3rem;
-	}
-
-	.step-card h3 {
-		font-family: var(--font-display);
-		font-size: 1.05rem;
-		font-weight: 700;
-		color: var(--cluster-color, var(--text));
-		margin: 0 0 0.4rem;
-	}
-
-	.step-card p {
-		font-size: 0.88rem;
-		line-height: 1.55;
-		color: var(--text);
-		margin: 0;
-	}
-
-	/* ── Steps column (mobile: invisible scroll triggers) ── */
-	.steps-col {
-		position: relative;
-		z-index: 0;
-	}
-
-	.scroll-trigger {
-		/* Mobile: each trigger is a tall invisible section that scrollama watches */
-		min-height: 80vh;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem 0;
-	}
-
-	.scroll-trigger:first-child {
-		min-height: 50vh;
-	}
-
-	.scroll-trigger:last-child {
-		min-height: 60vh;
-	}
-
-	/* Mobile: desktop cards hidden (overlay is used instead) */
-	.desktop-card {
-		display: none;
-	}
-
-	/* ═══════════════════════════════════════════════════
-	   Desktop layout (>= 768px): side-by-side grid
-	   ═══════════════════════════════════════════════════ */
-	@media (min-width: 768px) {
-		.tour-section {
-			display: grid;
-			grid-template-columns: 1.3fr 1fr;
-			gap: 3rem;
-			padding: 0 2rem;
-		}
-
-		.graphic-sticky {
-			top: 2rem;
-			height: calc(100svh - 4rem);
-			max-height: 760px;
-			align-self: start;
-		}
-
-		/* Mobile overlay hidden on desktop */
-		.mobile-step-overlay {
-			display: none;
-		}
-
-		/* Desktop cards visible in scroll column */
-		.desktop-card {
-			display: block;
-			max-width: 420px;
-		}
-
-		.scroll-trigger {
-			min-height: 80vh;
-			justify-content: flex-start;
-		}
-
-		.scroll-trigger:first-child {
-			min-height: 50vh;
-		}
-
-		.scroll-trigger:last-child {
-			min-height: 60vh;
-		}
-
-		.desktop-card {
-			background: var(--surface);
-			border: 1px solid var(--border);
-			border-left: 3px solid var(--cluster-color, var(--orange));
-			border-radius: 12px;
-			padding: 1.5rem 1.75rem;
-			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-		}
-	}
-
-	/* ── Explore footer ── */
-	.explore-footer {
-		max-width: 1200px;
-		margin: 4rem auto 5rem;
-		padding: 2rem 1.5rem;
-		text-align: center;
-		border-top: 1px solid var(--border);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.explore-hint {
+	.lede {
 		color: var(--text-muted);
 		font-size: 0.95rem;
 		margin: 0;
+		max-width: 60ch;
 	}
 
-	.replay-btn {
+	/* ── Filters ── */
+	.filters {
+		padding-top: 0.5rem;
+		padding-bottom: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+	}
+
+	.filter-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.filter-label {
+		font-family: var(--font-display);
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--text-muted);
+		flex-shrink: 0;
+		min-width: 3.2rem;
+	}
+
+	.chips {
+		display: flex;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+
+	.chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		background: var(--surface);
-		color: var(--text);
+		gap: 0.3rem;
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		font-weight: 600;
+		padding: 0.3rem 0.75rem;
+		border-radius: 999px;
 		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 0.65rem 1.2rem;
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
+		background: transparent;
+		color: var(--text-muted);
 		cursor: pointer;
-		transition: all 0.15s ease;
+		transition: color 0.15s, border-color 0.15s, background 0.15s;
 	}
 
-	.replay-btn:hover,
-	.replay-btn:active {
-		border-color: var(--orange);
+	.chip:hover {
+		color: var(--text);
+		border-color: var(--text-muted);
+	}
+
+	.chip.active {
+		color: var(--text);
+		font-weight: 700;
+	}
+
+	/* Topic chip colors when active — outlined when inactive, filled-glow when active */
+	.chip.topic-orange.active {
+		background: var(--orange-glow);
 		color: var(--orange);
+		border-color: rgba(224, 112, 32, 0.5);
+	}
+	.chip.topic-teal.active {
+		background: var(--teal-glow);
+		color: var(--teal);
+		border-color: rgba(26, 158, 143, 0.5);
+	}
+	.chip.topic-violet.active {
+		background: var(--violet-glow);
+		color: var(--violet);
+		border-color: rgba(124, 77, 255, 0.5);
+	}
+	.chip.topic-blue.active {
+		background: var(--blue-glow);
+		color: var(--blue);
+		border-color: rgba(41, 121, 255, 0.5);
+	}
+	.chip.topic-rose.active {
+		background: var(--rose-glow);
+		color: var(--rose);
+		border-color: rgba(214, 56, 100, 0.5);
+	}
+	.chip.topic-amber.active {
+		background: var(--amber-glow);
+		color: var(--amber);
+		border-color: rgba(199, 147, 36, 0.5);
+	}
+	.chip.topic-moss.active {
+		background: var(--moss-glow);
+		color: var(--moss);
+		border-color: rgba(94, 138, 62, 0.5);
+	}
+	.chip.topic-plum.active {
+		background: var(--plum-glow);
+		color: var(--plum);
+		border-color: rgba(155, 62, 124, 0.5);
 	}
 
-	.fallback-list {
-		max-width: 800px;
-		margin: 2rem auto;
-		padding: 2rem 1.5rem;
+	.chip-year.active {
+		background: var(--surface-2);
+		color: var(--text);
+		border-color: var(--text-muted);
 	}
 
-	.fallback-list h3 {
-		margin-top: 2rem;
-		font-family: var(--font-mono);
-		font-size: 1rem;
+	.chip-notes.active {
+		background: var(--surface-2);
+		color: var(--text);
+		border-color: var(--text-muted);
 	}
 
-	.fallback-list ul {
-		list-style: none;
-		padding: 0;
+	.chip-clear {
+		color: var(--text-muted);
+		border-style: dashed;
 	}
 
-	.fallback-list li {
-		margin-bottom: 1.5rem;
-		padding: 1rem;
+	.chip-clear:hover {
+		color: var(--orange);
+		border-color: var(--orange);
+		border-style: solid;
+	}
+
+	.filter-count {
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		margin: 0.25rem 0 0;
+	}
+
+	/* ── Empty state ── */
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 2.5rem 1rem;
+		color: var(--text-muted);
+		border: 1px dashed var(--border);
+		border-radius: 14px;
+	}
+
+	.empty p {
+		margin: 0;
+		font-size: 0.95rem;
+	}
+
+	/* ── Session list ── */
+	.session-list {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+		padding-bottom: 4rem;
+	}
+
+	.session-card {
+		background: var(--surface);
 		border: 1px solid var(--border);
+		border-radius: 14px;
+		overflow: hidden;
+	}
+
+	.session-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 1rem 1.5rem;
+		border-bottom: 1px solid var(--border);
+		background: var(--surface-2);
+		flex-wrap: wrap;
+	}
+
+	.session-week {
+		font-family: var(--font-display);
+		font-weight: 700;
+		font-size: 0.92rem;
+	}
+
+	.session-date {
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		color: var(--text-muted);
+	}
+
+	.topic-badge {
+		font-family: var(--font-display);
+		font-weight: 700;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		padding: 0.2rem 0.7rem;
+		border-radius: 12px;
+		margin-left: auto;
+	}
+
+	.topic-orange { background: var(--orange-glow); color: var(--orange); border: 1px solid rgba(224, 112, 32, 0.35); }
+	.topic-teal { background: var(--teal-glow); color: var(--teal); border: 1px solid rgba(26, 158, 143, 0.35); }
+	.topic-violet { background: var(--violet-glow); color: var(--violet); border: 1px solid rgba(124, 77, 255, 0.35); }
+	.topic-blue { background: var(--blue-glow); color: var(--blue); border: 1px solid rgba(41, 121, 255, 0.35); }
+	.topic-rose { background: var(--rose-glow); color: var(--rose); border: 1px solid rgba(214, 56, 100, 0.35); }
+	.topic-amber { background: var(--amber-glow); color: var(--amber); border: 1px solid rgba(199, 147, 36, 0.35); }
+	.topic-moss { background: var(--moss-glow); color: var(--moss); border: 1px solid rgba(94, 138, 62, 0.35); }
+	.topic-plum { background: var(--plum-glow); color: var(--plum); border: 1px solid rgba(155, 62, 124, 0.35); }
+
+	.session-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.recording-btn,
+	.read-post-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.78rem;
+		padding: 0.35rem 0.75rem;
 		border-radius: 8px;
+		text-decoration: none;
+		white-space: nowrap;
+		transition: all 0.15s;
+	}
+
+	.recording-btn {
+		color: var(--violet);
+		background: var(--violet-glow);
+		border: 1px solid rgba(124, 77, 255, 0.35);
+	}
+
+	.recording-btn:hover {
+		background: var(--violet);
+		color: white;
+		border-color: var(--violet);
+		text-decoration: none;
+	}
+
+	.read-post-btn {
+		color: var(--orange);
+		background: var(--orange-glow);
+		border: 1px solid rgba(224, 112, 32, 0.35);
+	}
+
+	.read-post-btn:hover {
+		background: var(--orange);
+		color: white;
+		border-color: var(--orange);
+		text-decoration: none;
+	}
+
+	.papers {
+		padding: 0.5rem 0;
+	}
+
+	.paper-row {
+		padding: 0.95rem 1.5rem;
+		border-bottom: 1px solid var(--surface-3);
+		transition: background 0.15s;
+		scroll-margin-top: 1rem;
+	}
+
+	.paper-row:last-child {
+		border-bottom: none;
+	}
+
+	.paper-row:hover {
+		background: var(--surface-2);
+	}
+
+	.paper-row:target {
+		background: var(--orange-glow);
+	}
+
+	.paper-title {
+		display: block;
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.95rem;
+		color: var(--text);
+		text-decoration: none;
+		margin-bottom: 0.25rem;
+		line-height: 1.4;
+	}
+
+	.paper-title:hover {
+		color: var(--orange);
+		text-decoration: none;
+	}
+
+	.paper-meta {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.paper-authors {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+
+	.paper-year {
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.75rem;
+		color: var(--teal);
+		background: var(--teal-glow);
+		border: 1px solid rgba(26, 158, 143, 0.3);
+		padding: 0.1rem 0.5rem;
+		border-radius: 8px;
+	}
+
+	.slides-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.72rem;
+		color: var(--teal);
+		text-decoration: none;
+		border: 1px solid rgba(26, 158, 143, 0.4);
+		background: var(--teal-glow);
+		padding: 0.12rem 0.55rem;
+		border-radius: 6px;
+		transition: all 0.15s;
+	}
+
+	.slides-link:hover {
+		background: var(--teal);
+		color: white;
+		border-color: var(--teal);
+		text-decoration: none;
+	}
+
+	.paper-blurb {
+		margin: 0.55rem 0 0;
+		font-size: 0.85rem;
+		line-height: 1.55;
+		color: var(--text-muted);
+		max-width: 70ch;
+	}
+
+	.related {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		align-items: center;
+		margin-top: 0.6rem;
+	}
+
+	.related-label {
+		font-family: var(--font-display);
+		font-size: 0.65rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--text-muted);
+		margin-right: 0.15rem;
+	}
+
+	.related-pill {
+		display: inline-block;
+		font-family: var(--font-display);
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		padding: 0.18rem 0.55rem;
+		border-radius: 999px;
+		text-decoration: none;
+		max-width: 28ch;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		transition: color 0.15s, border-color 0.15s, background 0.15s;
+	}
+
+	.related-pill:hover {
+		color: var(--orange);
+		border-color: var(--orange);
+		background: var(--orange-glow);
+		text-decoration: none;
+	}
+
+	.session-card {
+		opacity: 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.session-card {
+			opacity: 1 !important;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.session-meta {
+			padding: 0.75rem 1rem;
+		}
+		.paper-row {
+			padding: 0.8rem 1rem;
+		}
+		.topic-badge {
+			margin-left: 0;
+		}
+		.filter-label {
+			min-width: auto;
+		}
 	}
 </style>

@@ -1,5 +1,7 @@
 :root {
+	/* Brand accents — burnt orange stays. Teal/violet warmed slightly. */
 	--orange: #e07020;
+	--orange-hover: #c8611a;
 	--orange-glow: rgba(224, 112, 32, 0.18);
 	--teal: #1a9e8f;
 	--teal-glow: rgba(26, 158, 143, 0.18);
@@ -7,14 +9,29 @@
 	--violet-glow: rgba(124, 77, 255, 0.14);
 	--blue: #2979ff;
 	--blue-glow: rgba(41, 121, 255, 0.14);
-	--bg: #f8f9fb;
+	--rose: #d63864;
+	--rose-glow: rgba(214, 56, 100, 0.16);
+	--amber: #c79324;
+	--amber-glow: rgba(199, 147, 36, 0.18);
+	--moss: #5e8a3e;
+	--moss-glow: rgba(94, 138, 62, 0.18);
+	--plum: #9b3e7c;
+	--plum-glow: rgba(155, 62, 124, 0.16);
+
+	/* Surfaces — warmed a hair so the page reads paper-cream instead of paper-cool. */
+	--bg: #fafaf6;
 	--surface: #ffffff;
-	--surface-2: #f1f3f6;
-	--surface-3: #e6e9ee;
-	--text: #1a1d23;
-	--text-muted: #6b7280;
-	--border: #dde0e6;
-	--font-display: 'Quicksand', sans-serif;
-	--font-body: 'Outfit', sans-serif;
-	--font-mono: 'DM Mono', monospace;
+	--surface-2: #f3f2ec;
+	--surface-3: #e8e6dd;
+	--text: #1f1d1b;
+	--text-muted: #4a4640;
+	--border: #e0ddd3;
+
+	/* Type system. Quicksand carries body + display (with weight contrast).
+	   Mono is the system stack, reserved for actual <code>/<pre> blocks.
+	   Caveat is the handwritten accent for the footer aside. */
+	--font-body: 'Quicksand', system-ui, -apple-system, sans-serif;
+	--font-display: 'Quicksand', system-ui, -apple-system, sans-serif;
+	--font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+	--font-hand: 'Caveat', cursive;
 }

@@ -1,0 +1,283 @@
+---
+title: "LLMs for Audio Effects"
+subtitle: "Two papers from the Sony AI / KAIST group on using language models to drive EQ, compression, and reverb: first by predicting parameters, then by calling tools"
+date: "2026-05-08"
+authors: ["Music AI Reading Group"]
+tags: ["audio-fx", "llm", "tool-calling", "music-production", "eq", "reverb", "in-context-learning"]
+description: "Why audio effects are a uniquely tractable target for LLMs, and how the Doh et al. team moves from parameter regression (LLM2Fx) to tool-calling chains with chain-of-thought planning (LLM2Fx-Tools)."
+published: true
+badge: "music-ai-reading-group"
+---
+
+<script>
+	import FxParamPrediction from '$lib/components/viz/FxParamPrediction.svelte';
+	import ToolCallingChain from '$lib/components/viz/ToolCallingChain.svelte';
+	import FxParamSpace from '$lib/components/viz/FxParamSpace.svelte';
+	import OutputFormatCompare from '$lib/components/viz/OutputFormatCompare.svelte';
+	import StyleTransferDelta from '$lib/components/viz/StyleTransferDelta.svelte';
+	import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
+	import Callout from '$lib/components/ui/Callout.svelte';
+</script>
+
+## Why audio effects are a great target for LLMs
+
+Music production has a useful set of properties for an LLM to act on. The parameter spaces for individual effects are small: an EQ has a handful of bands, each with frequency, gain, and Q; a compressor has six or seven well-named knobs; a reverb has tail length, dampening, pre-delay, and mix. Every parameter has a name that engineers actually use ("low cut", "attack", "ratio"), so language already maps reasonably onto the action space. There is also a very large corpus of producers and engineers describing what effects do in natural language (tutorials, forum posts, mix critiques, gear reviews), which means the priors a frozen LLM brings into this domain are genuinely informed.
+
+The two papers this week are both from the Sony AI, KAIST, and UPenn group around Seungheon Doh, Junghyun Koo, and Marco Martínez-Ramírez. They're consecutive entries in a research thread, and they're best read that way. The first paper asks whether a frozen LLM can predict effect parameters directly from text descriptions. The second asks what it looks like to chain those predictions into a production workflow. The first paper is direct prediction. The second paper is tool calling, which turns out to be the more flexible framing.
+
+The papers, in order:
+
+- [LLM2Fx (Doh et al., 2025)](https://arxiv.org/abs/2505.20770). A frozen LLM predicts EQ and reverb parameters from a natural-language description. Three flavors of in-context examples make it competitive with prior optimization-based approaches.
+- [LLM2Fx-Tools (Doh et al., 2025)](https://arxiv.org/abs/2512.01559). The same group recasts the problem as multimodal tool calling: the LLM listens to audio, plans a chain of effects, and emits structured tool calls with chain-of-thought reasoning between them. Trained on a new instruction-following dataset (LP-Fx) and validated in a style-transfer setting.
+
+This week's papers also tie back to AudioChat from Week 5. AudioChat used LLM-tool-calling agents to *bootstrap training data* for an audio LM. LLM2Fx-Tools uses tool calling at *inference* time, where the tools manipulate effects directly. Same primitive, different deployment.
+
+## A few primers
+
+<div class="concepts">
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Knobs -->
+				<circle cx="20" cy="30" r="8" stroke="#e07020" stroke-width="1.2" fill="none" opacity="0.85"/>
+				<line x1="20" y1="30" x2="20" y2="24" stroke="#e07020" stroke-width="1.2" opacity="0.85"/>
+				<text x="20" y="48" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">freq</text>
+				<circle cx="40" cy="30" r="8" stroke="#e07020" stroke-width="1.2" fill="none" opacity="0.85"/>
+				<line x1="40" y1="30" x2="44" y2="26" stroke="#e07020" stroke-width="1.2" opacity="0.85"/>
+				<text x="40" y="48" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">gain</text>
+				<circle cx="60" cy="30" r="8" stroke="#e07020" stroke-width="1.2" fill="none" opacity="0.85"/>
+				<line x1="60" y1="30" x2="64" y2="32" stroke="#e07020" stroke-width="1.2" opacity="0.85"/>
+				<text x="60" y="48" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">Q</text>
+				<circle cx="80" cy="30" r="8" stroke="#e07020" stroke-width="1.2" fill="none" opacity="0.85"/>
+				<line x1="80" y1="30" x2="76" y2="24" stroke="#e07020" stroke-width="1.2" opacity="0.85"/>
+				<text x="80" y="48" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">type</text>
+				<text x="50" y="62" text-anchor="middle" fill="#9ca3af" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">~10–20 named knobs</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--orange)">FX parameter spaces are small and well-named</h4>
+			<p>An EQ band has frequency, gain, Q, and filter type. A compressor has threshold, ratio, attack, release, knee, and makeup gain. Each parameter has a name producers actually use, carrying semantic content the LLM has seen many thousands of times in tutorials and forum posts. The action space for "make this sound brighter and more punchy" is small enough that a single forward pass can land in roughly the right neighborhood, and the labels carry enough meaning that a prompt like "<em>boost 4 kHz by 3 dB</em>" maps almost trivially onto (band, freq, gain). That's a much friendlier setting than, say, predicting a 1024-d audio embedding.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Three columns: regression / generation / tool calling -->
+				<rect x="6" y="14" width="22" height="44" rx="2" stroke="#9ca3af" stroke-width="1" opacity="0.7"/>
+				<text x="17" y="30" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif">regression</text>
+				<text x="17" y="38" text-anchor="middle" fill="#9ca3af" font-size="4.5" font-family="Quicksand, system-ui, sans-serif">→ vector</text>
+				<rect x="38" y="14" width="22" height="44" rx="2" stroke="#7c4dff" stroke-width="1.2" opacity="0.85"/>
+				<text x="49" y="30" text-anchor="middle" fill="#7c4dff" font-size="5" font-family="Quicksand, system-ui, sans-serif">free gen</text>
+				<text x="49" y="38" text-anchor="middle" fill="#7c4dff" font-size="4.5" font-family="Quicksand, system-ui, sans-serif">→ string</text>
+				<rect x="70" y="14" width="22" height="44" rx="2" stroke="#e07020" stroke-width="1.2" opacity="0.85"/>
+				<text x="81" y="30" text-anchor="middle" fill="#e07020" font-size="5" font-family="Quicksand, system-ui, sans-serif">tool call</text>
+				<text x="81" y="38" text-anchor="middle" fill="#e07020" font-size="4.5" font-family="Quicksand, system-ui, sans-serif">→ schema</text>
+				<text x="50" y="68" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">three ways to commit to an action</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--violet)">Regression vs free generation vs tool calling</h4>
+			<p>There are three architectural choices for how an LLM should commit to an FX setting. <em>Regression</em> trains a head on top of the LLM that emits a continuous parameter vector. <em>Free generation</em> has the LLM emit text like "<code>EQ: 80 Hz +2 dB, 4 kHz +3 dB</code>" and parses it. <em>Tool calling</em> has the LLM emit structured JSON conforming to a registered tool schema (<code>set_eq(band=1, freq=80, gain=2)</code>). LLM2Fx is closer to free generation: text in, structured text out, with the LLM frozen. LLM2Fx-Tools is the tool-calling variant. The shift between the two papers is the whole story.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Three input types stacked -->
+				<rect x="14" y="10" width="72" height="14" rx="2" stroke="#9ca3af" stroke-width="1" opacity="0.7"/>
+				<text x="50" y="20" text-anchor="middle" fill="#9ca3af" font-size="5.5" font-family="Quicksand, system-ui, sans-serif">"warm vintage tape"</text>
+				<rect x="14" y="28" width="72" height="14" rx="2" stroke="#1a9e8f" stroke-width="1.2" opacity="0.85"/>
+				<path d="M22 35 Q26 32 30 38 T38 35 T46 38 T54 32 T62 36" stroke="#1a9e8f" stroke-width="1" fill="none" opacity="0.9"/>
+				<text x="78" y="38" text-anchor="end" fill="#1a9e8f" font-size="5" font-family="Quicksand, system-ui, sans-serif" opacity="0.85">audio</text>
+				<rect x="14" y="46" width="72" height="14" rx="2" stroke="#e07020" stroke-width="1.2" opacity="0.85"/>
+				<text x="50" y="56" text-anchor="middle" fill="#e07020" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.85">&#123; "low_shelf": 80, ... &#125;</text>
+				<text x="50" y="68" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">in-context: text · audio · params</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--teal)">In-context examples come in three flavors</h4>
+			<p>A useful result in LLM2Fx is that the in-context examples can be framed in three different shapes. <em>Textual</em> examples pair a description with parameter values. <em>Audio</em> examples pair perceptual features of a clip with parameter values. <em>Parametric</em> examples are parameter values on their own, anchoring the numerical scale. Each adds a different prior, and combining them lets a frozen LLM beat earlier optimization-based parameter-prediction baselines without any task-specific training. The framing matters because new effects can be added by just dropping in examples, with no retraining.</p>
+		</div>
+	</div>
+
+	<div class="concept-row">
+		<div class="concept-figure">
+			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Reference + target → chain -->
+				<rect x="4" y="22" width="22" height="14" rx="2" stroke="#1a9e8f" stroke-width="1.2" opacity="0.85"/>
+				<text x="15" y="32" text-anchor="middle" fill="#1a9e8f" font-size="5.5" font-family="Quicksand, system-ui, sans-serif">reference</text>
+				<rect x="4" y="40" width="22" height="14" rx="2" stroke="#9ca3af" stroke-width="1" opacity="0.7"/>
+				<text x="15" y="50" text-anchor="middle" fill="#9ca3af" font-size="5.5" font-family="Quicksand, system-ui, sans-serif">target</text>
+				<line x1="28" y1="38" x2="42" y2="38" stroke="#dde0e6" stroke-width="0.8"/>
+				<polygon points="40,36 43,38 40,40" fill="#dde0e6"/>
+				<rect x="44" y="22" width="50" height="32" rx="2" stroke="#e07020" stroke-width="1.2" opacity="0.85"/>
+				<text x="69" y="34" text-anchor="middle" fill="#e07020" font-size="5" font-family="Quicksand, system-ui, sans-serif">EQ → comp → reverb</text>
+				<text x="69" y="44" text-anchor="middle" fill="#e07020" font-size="4.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.6">tool calls + CoT</text>
+				<text x="50" y="68" text-anchor="middle" fill="#9ca3af" font-size="5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">style transfer in audio FX</text>
+			</svg>
+		</div>
+		<div class="concept-text">
+			<h4 style="color: var(--blue)">Style transfer is reference + target → FX chain</h4>
+			<p>The cleanest task framing for LLM2Fx-Tools is <em>style transfer</em>: a reference (how it should sound) plus a target (what's currently there), with the model asked for the FX chain that bridges them. The reference is processed audio in a desired style; the target is the unprocessed source. Because the system can see both, it can reason about specific differences (the reference is brighter, more compressed, with a longer reverb tail) and emit tool calls that close the gap. This is a useful abstraction because it sidesteps the underspecification of pure text prompts while staying in a problem domain producers actually have ("make this sound like that").</p>
+		</div>
+	</div>
+</div>
+
+Before the deep dives, two pedagogical detours. The first one shows what an EQ actually does, for readers who've never opened a DAW. The second one makes the regression-vs-free-gen-vs-tool-calling distinction concrete.
+
+<FxParamSpace />
+
+This is what producers mean when they describe sounds. "More air" pushes the high-shelf knob up. "Warmer" boosts low-shelf and rolls off the top. "Punchy" boosts low-shelf, sometimes with a small upper-mid lift. The labels carry shared meaning, and there's no perceptual mystery in the action space. That's part of what makes the LLM's text-trained priors usable here.
+
+<OutputFormatCompare />
+
+Each of the three formats is a different commitment device. Regression is rigid but compact. Free generation is flexible but brittle. Tool calling is the middle ground that scales, since schemas guarantee well-formed output, the LLM can chain calls, and new effects can be added without retraining. LLM2Fx is closer to free-gen with strict templates. LLM2Fx-Tools is the tool-calling pivot.
+
+## LLM2Fx: prompt → parameters, frozen LLM
+
+LLM2Fx (Doh et al., 2025) starts simple. The system has a frozen LLM, a set of audio effects (the paper focuses on equalization and reverberation), and a structured prompt template. Given a natural-language description like "make this guitar warm and intimate" or "thicker low end with airy top", the LLM generates parameter values for the registered effects, in a parseable format, with no fine-tuning. The LLM never touches audio in the simplest configuration; it works purely text-to-text.
+
+The result that makes the paper non-trivial is that this approach beats prior optimization-based approaches, which iteratively searched parameter space using audio-domain losses against a target. Those baselines were strong (they had access to audio and could optimize directly) but they were also slow because they were iterative, and they required differentiable effect implementations or careful black-box optimizers. LLM2Fx replaces the search loop with a single LLM forward pass and gets competitive results.
+
+The forward pass works because of the in-context examples, which come in three flavors:
+
+- *Textual*: pairs of `(description, parameters)` from a curated knowledge base. The LLM sees how producers describe parameter settings and learns to extrapolate.
+- *Audio*: pairs of `(audio features, parameters)` where the audio features are perceptual descriptors (brightness, warmth, density). This grounds the description in measurable acoustic properties.
+- *Parametric*: bare parameter examples that anchor the numerical scale (e.g., "moderate compression" usually meaning a ratio in the 3:1 to 5:1 range, not 50:1).
+
+The paper ablates these and finds that combining them is what closes the gap to optimization-based methods. Each flavor injects a different prior. Textual examples teach the LLM to map descriptors to parameters. Audio examples link descriptors to acoustic features. Parametric examples calibrate the numerical scale.
+
+<FxParamPrediction />
+
+The architectural footprint is small. There's no model training, no audio encoder, no learned projection. The whole system is a prompt template plus a small bank of in-context examples, and it scales by adding examples rather than by training. The deployment story is deliberate: the same setup can absorb new effects (chorus, distortion, delay) by adding an example bank for each, with no retraining required.
+
+<Callout type="insight">
+	The core finding isn't "LLMs are good at this" but rather "the right <em>kind</em> of in-context example matters a lot." Textual alone works to a point. Parametric alone works to a point. The combination beats both. That decomposition tells us something about what was missing in the LLM's prior knowledge.
+</Callout>
+
+The limitations are real and the paper is honest about them. Effect coverage is narrow (EQ, reverb). Continuous parameters are quantized to a vocabulary the LLM can emit. There's no audio feedback loop, since the LLM commits to parameters once, doesn't listen to the result, and doesn't adjust. The output is a single forward pass; iterative refinement has to be wrapped in a loop separately. Most of these limitations are what LLM2Fx-Tools sets out to address.
+
+## LLM2Fx-Tools: tool calling for the post-production workflow
+
+LLM2Fx-Tools (Doh et al., Dec 2025, ICLR 2026) recasts the same problem as multimodal tool calling. Instead of emitting parameter strings, the LLM emits *tool calls* against a registered set of audio-effect modules. Each tool call is a structured JSON payload: pick an effect type, pick its position in the chain, set its parameters. The LLM plans the entire chain via chain-of-thought reasoning between tool calls, and the chain is executable end-to-end.
+
+A few specific deltas from LLM2Fx:
+
+- *The LLM consumes audio.* It's a multimodal LLM (audio embedding plus text), so it can listen to the input clip, and in the style-transfer setup also to a reference clip, before planning. Audio goes from "absent" in LLM2Fx to a primary input in LLM2Fx-Tools.
+- *The output is an executable chain, not a parameter vector.* The LLM emits tool calls in order, with the order itself a learned decision (compressor before EQ, reverb last, and so on). The chain runs against a real effect implementation and produces audio.
+- *Chain-of-thought between calls.* The model reasons about each tool call before emitting it ("the target is duller and less compressed than the reference, so add a high-shelf at 4 kHz and a 3:1 compressor with medium attack"). The CoT isn't only for explainability; it's part of the trained sequence.
+- *A new dataset.* The paper introduces *LP-Fx*, an instruction-following dataset built around real music sources (the paper references MedleyDB and MOISESdb), with structured CoT annotations and tool-call traces. Effects are sampled from realistic ranges, so the model sees plausible chains during training rather than uniform-random parameter draws.
+
+<ToolCallingChain />
+
+The headline experiment is *style transfer*. Given a reference audio clip (sounds the way it should) and a target audio clip (the unprocessed source), the system has to predict an FX chain that, when applied to the target, makes it match the reference. This task is reasonable because (a) it's well-defined, with a specific gap to close, and (b) it sidesteps the underspecification of pure language prompts. "Make it warm" can mean many things; "make it sound like *that*" is much tighter. The paper shows the system can infer non-trivial chains from these reference and target pairs, including the order in which effects should be applied.
+
+The viz below makes the framing concrete. Pick a reference/target relationship (brighter, punchier, warmer) and watch the chain land step by step. The rose-shaded region between the lines is the gap to close, and each tool call eats into it.
+
+<StyleTransferDelta />
+
+Evaluation includes an *LLM-as-judge* component, where a separate LLM scores the appropriateness of the generated CoT and tool calls against held-out music-production queries. This is an Arena-style eval that sidesteps the absence of a single correct answer in production tasks. There is no ground-truth EQ curve for "make it punchier", but a competent judge can rank candidates. The paper reports that the system produces appropriate CoT reasoning and tool-call sequences across a range of production queries.
+
+<Callout type="definition" label="Tool-calling chain">
+	A sequence of structured function calls that an LLM emits autoregressively, with the LLM's own reasoning interleaved between calls. It's the same primitive that drives chat agents, except that the tools here are <code>set_eq</code>, <code>set_compressor</code>, <code>set_reverb</code> rather than <code>web_search</code> or <code>send_email</code>.
+</Callout>
+
+The architectural pivot from regression-style parameter prediction to autoregressive tool calling is what makes the second paper feel like a different system, rather than a bigger version of the first. Tool calling brings four free things. The order is part of the prediction. The model can stop early if a chain is short. Chain-of-thought reasoning composes naturally between calls. And the same primitive scales to dozens of effects without retraining. That's a lot of architectural mileage from one design choice.
+
+## Where the two papers fit together
+
+LLM2Fx and LLM2Fx-Tools land in the same overall area but at different points on a complexity ladder. LLM2Fx is the proof-of-concept: a frozen LLM, in-context examples only, narrow effect coverage, beats optimization baselines on parameter prediction. LLM2Fx-Tools is the productization, where the LLM listens to audio, the action is tool calling, the output is an executable chain, and the task is style transfer.
+
+| Axis | LLM2Fx | LLM2Fx-Tools |
+| --- | --- | --- |
+| Year | May 2025 | Dec 2025 / ICLR 2026 |
+| LLM access | Frozen, prompt-only | Multimodal, fine-tuned on LP-Fx |
+| Audio in | None (text only) | First-class (reference + target) |
+| Output format | Structured text → parsed | Tool calls + CoT |
+| Effects | EQ, reverb | EQ, compression, reverb, plausibly more |
+| Chain order | N/A; single effect | Learned, autoregressive |
+| Eval framing | Parameter prediction vs ground truth | Style transfer + LLM-as-judge |
+| Deployment | Plug-in suggestion UI | DAW assistant / post-production assistant |
+
+The arc the two papers describe is general beyond audio FX. Tool calling is likely to win in any domain where the action space is structured, the labels carry semantic content the LLM has prior over, and the user benefit comes from chaining several actions rather than picking one. Audio production is one of the cleanest such domains in music-AI right now, and that's part of why the second paper exists six months after the first rather than the other way around.
+
+## Open questions
+
+A few things we ended up debating prepping the session:
+
+- Both papers stop short of a *listening loop*, where the LLM would hear the output of its own tool calls and adjust. We're unsure whether that's a missing piece or whether the bias-variance trade-off in such a loop is too unfavorable, since closed-loop systems can chase noise. Producers iterate compulsively, but they iterate against their ears, and we don't yet know what an LLM's ears would actually contribute.
+- The semantic priors LLMs bring to audio FX come from training on text where producers describe effects. That works because production discourse is unusually well-documented. How this approach degrades in domains where the discourse is sparser (mastering, foley, sound design for film) is an open question.
+- Tool calling assumes well-defined tools, but the right granularity isn't obvious. `set_eq(band, freq, gain, q)` is one extreme; `make_brighter(amount)` is the other. The paper picks somewhere in between. We don't have a clean theory of which abstraction level lands the best LLM control.
+- The style-transfer framing sidesteps text-prompt ambiguity but introduces a different problem about where the reference audio comes from in a real session. In practice producers do have references, but they're not always close to the source material in instrumentation or arrangement. We'd want to see an ablation that pushes reference and target apart and reports how the chain prediction degrades.
+- LLM2Fx-Tools shares the tool-calling primitive with AudioChat from Week 5 (which used tool-calling agents to bootstrap training data) and arguably with the agent framing from the HCI papers in Week 6. There's a coherent cross-cutting story about tool-using audio LMs that none of these papers writes explicitly. That's where this thread may be heading.
+
+## Papers & related work
+
+<div class="resources-grid">
+	<ResourceLink href="https://arxiv.org/abs/2505.20770" category="Paper · 2025" categoryType="paper" label="Can Large Language Models Predict Audio Effects Parameters from Natural Language? (LLM2Fx)" host="Doh, Koo, Martínez-Ramírez, Liao, Nam, Mitsufuji" />
+	<ResourceLink href="https://arxiv.org/abs/2512.01559" category="Paper · ICLR 2026" categoryType="paper" label="LLM2Fx-Tools: Tool Calling for Music Post-Production" host="Doh et al." />
+	<ResourceLink href="https://arxiv.org/abs/2602.17097" category="Paper · related" categoryType="paper" label="AudioChat (Week 5): same tool-calling primitive, different deployment" host="Chen et al." />
+	<ResourceLink href="https://arxiv.org/abs/2206.07304" category="Paper · 2022" categoryType="paper" label="Style Transfer of Audio Effects with Differentiable Signal Processing (DASP)" host="Steinmetz, Bryan, Reiss" />
+	<ResourceLink href="https://medleydb.weebly.com/" category="Dataset" categoryType="dataset" label="MedleyDB (referenced by LP-Fx)" host="medleydb.weebly.com" />
+	<ResourceLink href="https://music.ai/research/moisesdb" category="Dataset" categoryType="dataset" label="MOISESdb (referenced by LP-Fx)" host="music.ai/research" />
+</div>
+
+## Demos & code
+
+<div class="resources-grid">
+	<ResourceLink href="https://github.com/seungheondoh/llm2fx" category="Code" categoryType="tool" label="LLM2Fx (search seungheondoh/llm2fx)" host="github.com" />
+	<ResourceLink href="https://csteinmetz1.github.io/" category="Reference site" categoryType="tool" label="Christian Steinmetz: differentiable audio FX research" host="csteinmetz1.github.io" />
+	<ResourceLink href="https://github.com/mclemcrew/music-ai-reading-group" category="Code · Examples" categoryType="tool" label="Reading Group Repo" host="github.com/mclemcrew" />
+</div>
+
+<style>
+	.concepts {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		margin: 1.5rem 0;
+	}
+
+	.concept-row {
+		display: grid;
+		grid-template-columns: 200px 1fr;
+		gap: 1.25rem;
+		align-items: start;
+	}
+
+	.concept-figure {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		padding: 0.5rem;
+	}
+
+	.concept-figure svg {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+
+	.concept-text h4 {
+		margin: 0 0 0.4rem;
+		font-size: 0.95rem;
+		font-weight: 600;
+	}
+
+	.concept-text p {
+		margin: 0;
+		font-size: 0.92rem;
+		line-height: 1.55;
+	}
+
+	@media (max-width: 640px) {
+		.concept-row {
+			grid-template-columns: 1fr;
+		}
+		.concept-figure {
+			max-width: 280px;
+		}
+	}
+</style>

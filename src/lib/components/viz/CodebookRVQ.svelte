@@ -408,7 +408,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.75rem;
 		padding: 0.35rem 0.85rem;
 		border-radius: 5px;

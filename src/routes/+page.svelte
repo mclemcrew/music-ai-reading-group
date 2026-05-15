@@ -2,104 +2,16 @@
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import { animate, stagger } from 'animejs';
+	import { sessions, recentSessions } from '$lib/data/sessions';
 
 	let { data } = $props();
 
-	// Schedule data from the Google Sheet
-	const sessions = [
-		{
-			week: 'Week 1',
-			date: '2026-03-19',
-			topic: 'Signal Processing & ML',
-			topicColor: 'orange',
-			recording: null as { url: string; passcode: string } | null,
-			papers: [
-				{
-					title: 'DDSP: Differentiable Digital Signal Processing',
-					authors: 'Engel, Hantrakul, Gu, Roberts',
-					year: 2020,
-					link: 'https://arxiv.org/abs/2001.04643',
-					hasPost: true,
-					postSlug: 'ddsp-from-scratch',
-					excalidraw: 'https://link.excalidraw.com/l/8sDmlvduhSt/7mA11Gu7KXU'
-				},
-				{
-					title: 'A Review of Differentiable Digital Signal Processing for Music & Speech Synthesis',
-					authors: 'Hayes, Shier, Saitis, Fazekas',
-					year: 2024,
-					link: 'https://arxiv.org/abs/2308.15422',
-					hasPost: false,
-					excalidraw: null as string | null
-				}
-			]
-		},
-		{
-			week: 'Week 2',
-			date: '2026-03-26',
-			topic: 'Music Transcription',
-			topicColor: 'teal',
-			recording: null as { url: string; passcode: string } | null,
-			papers: [
-				{
-					title: 'A Lightweight Instrument-Agnostic Model for Polyphonic Note Transcription and Multipitch Estimation',
-					authors: 'Bittner, Bosch, Rubinstein, Meseguer-Brocal, Ewert',
-					year: 2022,
-					link: 'https://arxiv.org/pdf/2203.09893',
-					hasPost: true,
-					postSlug: 'music-transcription',
-					excalidraw: null as string | null
-				},
-				{
-					title: 'MT3: Multi-Task Multitrack Music Transcription',
-					authors: 'Gardner, Simon, Manilow, Hawthorne, Engel',
-					year: 2021,
-					link: 'https://arxiv.org/pdf/2111.03017',
-					hasPost: true,
-					postSlug: 'music-transcription',
-					excalidraw: null as string | null
-				},
-				{
-					title: 'Onsets and Frames: Dual-Objective Piano Transcription',
-					authors: 'Hawthorne, Elsen, Song, Roberts, Simon, Raffel, Engel, Oore, Eck',
-					year: 2017,
-					link: 'https://arxiv.org/pdf/1710.11153',
-					hasPost: true,
-					postSlug: 'music-transcription',
-					excalidraw: null as string | null
-				}
-			]
-		},
-		{
-			week: 'Week 3',
-			date: '2026-04-02',
-			topic: 'Music Generation',
-			topicColor: 'violet',
-			recording: {
-				url: 'https://uaudio.zoom.us/rec/share/tQ1lJVI7ebYkkMVbSDeiVjopNV7dkr160gOCwLkSzdIJPyIBwmHP5OZZ-kCdnC0A.UEFQBxkQyMmCPH4-',
-				passcode: 'Di!3?KhN'
-			},
-			papers: [
-				{
-					title: 'VampNet: Music Generation via Masked Acoustic Token Modeling',
-					authors: 'Garcia, Tsuda, Shier, Bryan, Fierro, Agostinelli',
-					year: 2023,
-					link: 'https://arxiv.org/abs/2307.04686',
-					hasPost: true,
-					postSlug: 'music-generation',
-					excalidraw: 'https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C'
-				},
-				{
-					title: 'Anticipatory Music Transformer',
-					authors: 'Thickstun, Hall, Donahue, Liang',
-					year: 2023,
-					link: 'https://arxiv.org/abs/2306.08620',
-					hasPost: true,
-					postSlug: 'music-generation',
-					excalidraw: 'https://link.excalidraw.com/l/8sDmlvduhSt/1IR71UHPGmr'
-				}
-			]
-		}
-	];
+	const featuredSessions = recentSessions(2);
+	const totalSessions = sessions.length;
+	const totalPapers = sessions.reduce((n, s) => n + s.papers.length, 0);
+	const FEATURED_POSTS = 2;
+	const featuredPosts = $derived(data.posts.slice(0, FEATURED_POSTS));
+	const totalPosts = $derived(data.posts.length);
 
 	const timezones = [
 		{ city: 'California', time: '7:00 AM', tz: 'PST' },
@@ -108,20 +20,28 @@
 		{ city: 'Europe', time: '4:00 PM', tz: 'CEST' }
 	];
 
-	let bars: HTMLElement[] = [];
+	let staffLines: SVGPathElement[] = [];
+	let noteStems: SVGPathElement[] = [];
+	let noteGroups: SVGGElement[] = [];
 	let heroRef: HTMLElement;
 	let scheduleRef: HTMLElement;
 	let postsRef = $state<HTMLElement | undefined>(undefined);
 
-	const BAR_COUNT = 36;
+	// Quarter notes scattered along the staff. Stems vertical (no group
+	// rotation), heads tilted ~24° in the standard musical convention and
+	// large enough to fill the staff space.
+	const notePositions = [
+		{ x: 200, y: 70 },
+		{ x: 400, y: 55 },
+		{ x: 580, y: 85 },
+		{ x: 760, y: 70 },
+		{ x: 950, y: 55 }
+	];
 
 	onMount(() => {
 		const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-		if (reducedMotion) {
-			// Show everything immediately, skip entrance animations
-			bars.forEach((bar) => { bar.style.opacity = '0.55'; bar.style.transform = 'scaleY(0.5)'; });
-		} else {
+		if (!reducedMotion) {
 			// Hero text entrance — starts immediately so it's the first thing visible
 			animate(heroRef.querySelectorAll('.hero-text > *'), {
 				translateY: [20, 0],
@@ -131,29 +51,31 @@
 				ease: 'outExpo'
 			});
 
-			// Bars entrance — starts after hero text begins
-			animate(bars, {
-				scaleY: [0, 1],
-				opacity: [0, 0.65],
-				duration: 550,
-				delay: stagger(18, { start: 200 }),
-				ease: 'outExpo'
-			});
-		}
-
-		// Continuous traveling sine wave — skip for reduced motion
-		let raf: number;
-		if (!reducedMotion) {
-			function tick(ts: number) {
-				const t = ts * 0.00125;
-				bars.forEach((bar, i) => {
-					const phase = (i / (BAR_COUNT - 1)) * Math.PI * 4;
-					const s = 0.08 + 0.9 * (0.5 + 0.5 * Math.sin(t - phase));
-					bar.style.transform = `scaleY(${s.toFixed(3)})`;
-				});
-				raf = requestAnimationFrame(tick);
+			// Staff lines + note stems draw on via stroke-dashoffset
+			const drawOn: SVGGeometryElement[] = [...staffLines, ...noteStems];
+			for (const el of drawOn) {
+				if (!el) continue;
+				const len = el.getTotalLength();
+				el.style.strokeDasharray = `${len}`;
+				el.style.strokeDashoffset = `${len}`;
 			}
-			raf = requestAnimationFrame(tick);
+			animate(drawOn, {
+				strokeDashoffset: 0,
+				duration: 900,
+				delay: stagger(45, { start: 200 }),
+				ease: 'outQuad'
+			});
+
+			// Filled note heads fade in shortly after their stems start drawing
+			for (const g of noteGroups) {
+				if (g) g.style.opacity = '0';
+			}
+			animate(noteGroups, {
+				opacity: [0, 0.85],
+				duration: 500,
+				delay: stagger(45, { start: 500 }),
+				ease: 'outQuad'
+			});
 		}
 
 		const scheduleObs = new IntersectionObserver(
@@ -195,7 +117,6 @@
 		);
 		if (postsRef) postsObs.observe(postsRef);
 
-		return () => { if (raf) cancelAnimationFrame(raf); };
 	});
 </script>
 
@@ -207,43 +128,51 @@
 <!-- ═══ HERO ═══ -->
 <section class="hero" bind:this={heroRef}>
 	<div class="hero-bg-svg" aria-hidden="true">
-		<!-- Decorative background arcs -->
-		<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-			<defs>
-				<radialGradient id="grad1" cx="30%" cy="50%" r="60%">
-					<stop offset="0%" stop-color="var(--orange)" stop-opacity="0.08" />
-					<stop offset="100%" stop-color="var(--orange)" stop-opacity="0" />
-				</radialGradient>
-				<radialGradient id="grad2" cx="70%" cy="50%" r="60%">
-					<stop offset="0%" stop-color="var(--teal)" stop-opacity="0.07" />
-					<stop offset="100%" stop-color="var(--teal)" stop-opacity="0" />
-				</radialGradient>
-			</defs>
-			<ellipse cx="300" cy="200" rx="420" ry="300" fill="url(#grad1)" />
-			<ellipse cx="900" cy="200" rx="420" ry="300" fill="url(#grad2)" />
-			<!-- Staff lines -->
-			{#each [130, 155, 180, 205, 230] as y}
-				<line x1="0" y1={y} x2="1200" y2={y} stroke="var(--border)" stroke-width="1" opacity="0.6" />
+		<svg viewBox="0 0 1200 150" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+			<!-- Hand-drawn-feel staff lines: slight bezier wobble, not perfectly straight -->
+			{#each [25, 55, 85, 115, 145] as y, i}
+				<path
+					bind:this={staffLines[i]}
+					d={`M 40 ${y + (i % 2 === 0 ? -0.6 : 0.8)} C 360 ${y + 1.4}, 720 ${y - 1.6}, 1160 ${y + (i % 2 === 0 ? 0.7 : -0.9)}`}
+					stroke="var(--text-muted)"
+					stroke-width="1"
+					stroke-linecap="round"
+					fill="none"
+					opacity="0.36"
+				/>
 			{/each}
-			<!-- Treble clef -->
-			<text x="80" y="248" font-family="serif" font-size="155" text-anchor="middle" fill="var(--orange)" opacity="0.13">𝄞</text>
-			<!-- Quarter notes suggestion -->
-			{#each [200, 350, 500, 680, 820, 970] as x}
-				<circle cx={x} cy={130 + (x % 50 === 0 ? 25 : x % 75 === 0 ? 0 : 50)} r="7" fill="var(--teal)" opacity="0.08" />
-				<line x1={x + 7} y1={130 + (x % 50 === 0 ? 25 : x % 75 === 0 ? 0 : 50)} x2={x + 7} y2={130 + (x % 50 === 0 ? 25 : x % 75 === 0 ? 0 : 50) - 40} stroke="var(--teal)" stroke-width="1.5" opacity="0.10" />
+			<!-- Quarter notes: vertical stems, filled heads, tilted ~24° -->
+			{#each notePositions as np, i}
+				<g bind:this={noteGroups[i]}>
+					<ellipse
+						cx={np.x}
+						cy={np.y}
+						rx="11"
+						ry="7.5"
+						transform={`rotate(-24 ${np.x} ${np.y})`}
+						fill="var(--orange)"
+					/>
+					<path
+						bind:this={noteStems[i]}
+						d={`M ${np.x + 10} ${np.y - 4} L ${np.x + 10} ${np.y - 40}`}
+						stroke="var(--orange)"
+						stroke-width="1.6"
+						stroke-linecap="round"
+						fill="none"
+					/>
+				</g>
 			{/each}
 		</svg>
 	</div>
 
 	<div class="hero-inner container">
 		<div class="hero-text">
-			<div class="hero-badge">Weekly Reading Group</div>
 			<h1>
 				Music<span class="accent-dot" style="color:var(--orange)">.</span>
 				Co-Creative<span class="accent-dot" style="color:var(--teal)">.</span>
 				AI
 			</h1>
-			<p class="hero-sub">We read ML papers about music, try to actually understand them, and document what we learn. Interactive demos, code, and a lot of questions along the way.</p>
+			<p class="hero-sub">We meet weekly to read a paper or two at the intersection of music and ML. After each session, we write up notes, post the slides, and sometimes record video or build a small demo. Most of what we make ends up on this site.</p>
 			<div class="hero-actions">
 				<a href="https://groups.google.com/g/music-co-creative-ai" target="_blank" rel="noopener" class="btn-primary">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -265,13 +194,6 @@
 					GitHub
 				</a>
 			</div>
-		</div>
-
-		<!-- Animated waveform -->
-		<div class="hero-waveform" aria-hidden="true">
-			{#each Array(BAR_COUNT) as _, i}
-				<div class="waveform-bar" bind:this={bars[i]}></div>
-			{/each}
 		</div>
 	</div>
 
@@ -300,10 +222,10 @@
 	</div>
 
 	<div class="sessions">
-		{#each sessions as session}
+		{#each featuredSessions as session}
 			{@const sessionPost = session.papers.find((p) => p.hasPost)?.postSlug}
 			<div class="session-card">
-				<div class="session-meta">
+				<div class="session-meta topic-{session.topicColor}">
 					<span class="session-week">{session.week}</span>
 					<span class="session-date">{session.date}</span>
 					<span class="topic-badge topic-{session.topicColor}">{session.topic}</span>
@@ -347,54 +269,15 @@
 			</div>
 		{/each}
 	</div>
-</section>
 
-<!-- ═══ PAPER CONSTELLATION CARD ═══ -->
-<section class="constellation-cta container">
-	<a href="{base}/papers" class="constellation-card">
-		<div class="constellation-preview" aria-hidden="true">
-			<svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
-				<!-- Mini version of the constellation: 3 cluster centers with a few orbiting nodes -->
-				<!-- Signal processing cluster (top) -->
-				<circle cx="100" cy="40" r="30" fill="none" stroke="var(--orange)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35"/>
-				<line x1="100" y1="40" x2="88" y2="25" stroke="var(--orange)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
-				<line x1="100" y1="40" x2="115" y2="28" stroke="var(--orange)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
-				<circle cx="88" cy="25" r="4" fill="white" stroke="var(--orange)" stroke-width="1.5"/>
-				<circle cx="115" cy="28" r="4" fill="white" stroke="var(--orange)" stroke-width="1.5"/>
-				<!-- Transcription cluster (bottom left) -->
-				<circle cx="55" cy="95" r="30" fill="none" stroke="var(--teal)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35"/>
-				<line x1="55" y1="95" x2="42" y2="82" stroke="var(--teal)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
-				<line x1="55" y1="95" x2="68" y2="85" stroke="var(--teal)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
-				<line x1="55" y1="95" x2="45" y2="108" stroke="var(--teal)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
-				<circle cx="42" cy="82" r="4" fill="white" stroke="var(--teal)" stroke-width="1.5"/>
-				<circle cx="68" cy="85" r="4" fill="white" stroke="var(--teal)" stroke-width="1.5"/>
-				<circle cx="45" cy="108" r="4" fill="white" stroke="var(--teal)" stroke-width="1.5"/>
-				<!-- Generation cluster (bottom right) -->
-				<circle cx="145" cy="95" r="30" fill="none" stroke="var(--violet)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35"/>
-				<line x1="145" y1="95" x2="135" y2="82" stroke="var(--violet)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
-				<line x1="145" y1="95" x2="158" y2="85" stroke="var(--violet)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
-				<circle cx="135" cy="82" r="4" fill="white" stroke="var(--violet)" stroke-width="1.5"/>
-				<circle cx="158" cy="85" r="4" fill="white" stroke="var(--violet)" stroke-width="1.5"/>
-				<!-- Cross-cluster hint line -->
-				<line x1="115" y1="28" x2="68" y2="85" stroke="var(--text-muted)" stroke-width="0.5" opacity="0.3"/>
-				<line x1="135" y1="82" x2="68" y2="85" stroke="var(--text-muted)" stroke-width="0.5" opacity="0.3"/>
-			</svg>
+	{#if totalSessions > featuredSessions.length}
+		<div class="schedule-more">
+			<a href="{base}/papers" class="all-sessions-link">
+				Browse all {totalPapers} papers
+				<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+			</a>
 		</div>
-		<div class="constellation-text">
-			<span class="constellation-kicker">New</span>
-			<h2>Paper Constellation</h2>
-			<p>
-				Every paper we've read, mapped by theme. Walk through each cluster, then tap any node to
-				see why we picked it.
-			</p>
-			<span class="constellation-cta-link">
-				Explore the map
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-					<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-				</svg>
-			</span>
-		</div>
-	</a>
+	{/if}
 </section>
 
 <!-- ═══ PUBLISHED NOTES ═══ -->
@@ -406,7 +289,7 @@
 	</div>
 
 	<div class="posts-grid">
-		{#each data.posts as post}
+		{#each featuredPosts as post}
 			<a href="{base}/posts/{post.slug}" class="post-card">
 				<div class="post-card-top">
 					{#if post.tags?.length}
@@ -427,6 +310,15 @@
 			</a>
 		{/each}
 	</div>
+
+	{#if totalPosts > featuredPosts.length}
+		<div class="schedule-more">
+			<a href="{base}/posts" class="all-sessions-link">
+				Browse all {totalPosts} notes
+				<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+			</a>
+		</div>
+	{/if}
 </section>
 {/if}
 
@@ -480,47 +372,43 @@
 		padding-bottom: 0;
 	}
 
+	/* Top decoration band: wobbly staff lines + scattered hand-drawn notes.
+	   Sits in the upper portion of the hero only, so it never overlaps the
+	   H1 / paragraph / button row that follows. */
 	.hero-bg-svg {
 		position: absolute;
-		inset: 0;
+		top: 1.5rem;
+		left: 0;
+		right: 0;
+		height: clamp(110px, 14vw, 150px);
 		pointer-events: none;
+		opacity: 0.85;
 	}
 
 	.hero-bg-svg svg {
 		width: 100%;
 		height: 100%;
-		object-fit: cover;
+		display: block;
 	}
 
 	.hero-inner {
-		display: grid;
-		grid-template-columns: 1fr 280px;
-		gap: 3rem;
-		align-items: center;
-		padding-top: 4rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		padding-top: clamp(9rem, 16vw, 11rem);
 		padding-bottom: 3rem;
 		position: relative;
+		max-width: 720px;
+		margin-left: auto;
+		margin-right: auto;
+		text-align: center;
 	}
 
 	.hero-text {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.hero-badge {
-		display: inline-flex;
 		align-items: center;
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--teal);
-		background: var(--teal-glow);
-		border: 1px solid rgba(26, 158, 143, 0.25);
-		border-radius: 20px;
-		padding: 0.3rem 0.9rem;
-		width: fit-content;
+		gap: 1rem;
 	}
 
 	h1 {
@@ -539,8 +427,8 @@
 		font-size: clamp(0.95rem, 2vw, 1.1rem);
 		color: var(--text-muted);
 		font-weight: 300;
-		max-width: 480px;
-		margin-bottom: 0.5rem;
+		max-width: 560px;
+		margin: 0 auto 0.5rem;
 	}
 
 	.hero-actions {
@@ -548,6 +436,7 @@
 		gap: 0.75rem;
 		flex-wrap: wrap;
 		align-items: center;
+		justify-content: center;
 	}
 
 	.btn-primary {
@@ -596,24 +485,6 @@
 		text-decoration: none;
 	}
 
-	/* Waveform */
-	.hero-waveform {
-		display: flex;
-		align-items: flex-end;
-		gap: 3px;
-		height: 130px;
-	}
-
-	.waveform-bar {
-		flex: 1;
-		height: 100%;
-		background: var(--orange);
-		border-radius: 2px 2px 0 0;
-		opacity: 0.55;
-		transform-origin: bottom;
-		transform: scaleY(0.08);
-	}
-
 	/* Timezone strip */
 	.timezone-strip {
 		background: var(--surface);
@@ -624,9 +495,10 @@
 	.tz-inner {
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.6rem;
 		flex-wrap: wrap;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.78rem;
 	}
 
@@ -718,16 +590,17 @@
 	}
 
 	.session-date {
-		font-family: var(--font-mono);
-		font-size: 0.78rem;
+		font-family: var(--font-display);
+		font-size: 0.85rem;
 		color: var(--text-muted);
 	}
 
 	.topic-badge {
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
+		font-family: var(--font-display);
+		font-weight: 700;
+		font-size: 0.72rem;
 		text-transform: uppercase;
-		letter-spacing: 0.07em;
+		letter-spacing: 0.06em;
 		padding: 0.2rem 0.7rem;
 		border-radius: 12px;
 		margin-left: auto;
@@ -750,11 +623,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.78rem;
 		color: var(--violet);
 		background: var(--violet-glow);
-		border: 1px solid rgba(124, 77, 255, 0.2);
+		border: 1px solid rgba(124, 77, 255, 0.35);
 		padding: 0.35rem 0.75rem;
 		border-radius: 8px;
 		text-decoration: none;
@@ -771,9 +645,10 @@
 	}
 
 	.recording-pw {
-		font-family: var(--font-mono);
-		font-size: 0.65rem;
-		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-weight: 500;
+		font-size: 0.8rem;
+		color: var(--text);
 		white-space: nowrap;
 	}
 
@@ -781,13 +656,14 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.72rem;
 		color: var(--teal);
 		text-decoration: none;
-		border: 1px solid rgba(26, 158, 143, 0.25);
+		border: 1px solid rgba(26, 158, 143, 0.4);
 		background: var(--teal-glow);
-		padding: 0.1rem 0.5rem;
+		padding: 0.12rem 0.55rem;
 		border-radius: 6px;
 		transition: all 0.15s;
 		flex-shrink: 0;
@@ -803,19 +679,105 @@
 	.topic-orange {
 		background: var(--orange-glow);
 		color: var(--orange);
-		border: 1px solid rgba(224, 112, 32, 0.2);
+		border: 1px solid rgba(224, 112, 32, 0.35);
 	}
 
 	.topic-teal {
 		background: var(--teal-glow);
 		color: var(--teal);
-		border: 1px solid rgba(26, 158, 143, 0.2);
+		border: 1px solid rgba(26, 158, 143, 0.35);
 	}
 
 	.topic-violet {
 		background: var(--violet-glow);
 		color: var(--violet);
-		border: 1px solid rgba(124, 77, 255, 0.2);
+		border: 1px solid rgba(124, 77, 255, 0.35);
+	}
+
+	.topic-blue {
+		background: var(--blue-glow);
+		color: var(--blue);
+		border: 1px solid rgba(41, 121, 255, 0.35);
+	}
+
+	.topic-rose {
+		background: var(--rose-glow);
+		color: var(--rose);
+		border: 1px solid rgba(214, 56, 100, 0.35);
+	}
+
+	.topic-amber {
+		background: var(--amber-glow);
+		color: var(--amber);
+		border: 1px solid rgba(199, 147, 36, 0.35);
+	}
+
+	.topic-moss {
+		background: var(--moss-glow);
+		color: var(--moss);
+		border: 1px solid rgba(94, 138, 62, 0.35);
+	}
+
+	.topic-plum {
+		background: var(--plum-glow);
+		color: var(--plum);
+		border: 1px solid rgba(155, 62, 124, 0.35);
+	}
+
+	.session-meta.topic-orange {
+		background: var(--orange-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(224, 112, 32, 0.28);
+	}
+
+	.session-meta.topic-teal {
+		background: var(--teal-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(26, 158, 143, 0.3);
+	}
+
+	.session-meta.topic-violet {
+		background: var(--violet-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(124, 77, 255, 0.28);
+	}
+
+	.session-meta.topic-blue {
+		background: var(--blue-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(41, 121, 255, 0.28);
+	}
+
+	.session-meta.topic-rose {
+		background: var(--rose-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(214, 56, 100, 0.3);
+	}
+
+	.session-meta.topic-amber {
+		background: var(--amber-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(199, 147, 36, 0.32);
+	}
+
+	.session-meta.topic-moss {
+		background: var(--moss-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(94, 138, 62, 0.32);
+	}
+
+	.session-meta.topic-plum {
+		background: var(--plum-glow);
+		color: var(--text);
+		border: none;
+		border-bottom: 1px solid rgba(155, 62, 124, 0.3);
 	}
 
 	.session-papers {
@@ -873,7 +835,7 @@
 	}
 
 	.paper-year {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.72rem;
 		color: var(--teal);
 		background: var(--teal-glow);
@@ -885,11 +847,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.78rem;
 		color: var(--orange);
 		background: var(--orange-glow);
-		border: 1px solid rgba(224, 112, 32, 0.2);
+		border: 1px solid rgba(224, 112, 32, 0.35);
 		padding: 0.35rem 0.75rem;
 		border-radius: 8px;
 		text-decoration: none;
@@ -905,117 +868,33 @@
 		border-color: var(--orange);
 	}
 
-	/* ── Constellation CTA ── */
-	.constellation-cta {
-		padding-top: 0;
-		padding-bottom: 0;
-		margin-top: -1.5rem;
+	.schedule-more {
+		margin-top: 1.5rem;
+		display: flex;
+		justify-content: flex-end;
 	}
 
-	.constellation-card {
-		display: grid;
-		grid-template-columns: 200px 1fr;
-		gap: 1.75rem;
-		align-items: center;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 16px;
-		padding: 1.75rem 2rem;
-		text-decoration: none;
-		color: var(--text);
-		transition: all 0.2s ease;
-		position: relative;
-		overflow: hidden;
-	}
-
-	.constellation-card::before {
-		content: '';
-		position: absolute;
-		inset: 0;
-		background: linear-gradient(135deg, var(--orange-glow) 0%, transparent 40%, var(--teal-glow) 70%, var(--violet-glow) 100%);
-		opacity: 0.4;
-		pointer-events: none;
-	}
-
-	.constellation-card:hover,
-	.constellation-card:active {
-		border-color: var(--orange);
-		transform: translateY(-2px);
-		box-shadow: 0 6px 28px rgba(0, 0, 0, 0.06);
-		text-decoration: none;
-	}
-
-	.constellation-preview {
-		position: relative;
-		z-index: 1;
-	}
-
-	.constellation-preview svg {
-		width: 100%;
-		height: auto;
-		display: block;
-	}
-
-	.constellation-text {
-		position: relative;
-		z-index: 1;
-	}
-
-	.constellation-kicker {
-		display: inline-block;
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		color: var(--orange);
-		background: var(--orange-glow);
-		border: 1px solid rgba(224, 112, 32, 0.25);
-		padding: 0.2rem 0.65rem;
-		border-radius: 12px;
-		margin-bottom: 0.6rem;
-	}
-
-	.constellation-text h2 {
-		font-family: var(--font-display);
-		font-size: 1.4rem;
-		font-weight: 700;
-		color: var(--text);
-		margin: 0 0 0.4rem;
-	}
-
-	.constellation-text p {
-		font-size: 0.92rem;
-		color: var(--text-muted);
-		line-height: 1.55;
-		margin: 0 0 0.9rem;
-	}
-
-	.constellation-cta-link {
+	.all-sessions-link {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
-		color: var(--orange);
-		font-weight: 500;
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text-muted);
+		text-decoration: none;
+		padding: 0.5rem 0.85rem;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		transition: color 0.15s, border-color 0.15s, background 0.15s;
 	}
 
-	@media (max-width: 640px) {
-		.constellation-card {
-			grid-template-columns: 1fr;
-			gap: 1rem;
-			padding: 1.25rem 1.25rem 1.5rem;
-		}
-		.constellation-preview svg {
-			max-width: 220px;
-			margin: 0 auto;
-		}
-		.constellation-text {
-			text-align: center;
-		}
-		.constellation-cta-link {
-			justify-content: center;
-		}
+	.all-sessions-link:hover {
+		color: var(--orange);
+		border-color: var(--orange);
+		background: var(--orange-glow);
+		text-decoration: none;
 	}
 
 	/* ── Posts ── */
@@ -1066,7 +945,7 @@
 	}
 
 	.tag {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.65rem;
 		background: var(--surface-2);
 		border: 1px solid var(--border);
@@ -1100,13 +979,13 @@
 	}
 
 	time {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.72rem;
 		color: var(--text-muted);
 	}
 
 	.post-read {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.72rem;
 		color: var(--orange);
 	}
@@ -1169,15 +1048,14 @@
 	/* ── Responsive ── */
 	@media (max-width: 760px) {
 		.hero-inner {
-			grid-template-columns: 1fr;
-			padding-top: 2.5rem;
+			padding-top: clamp(7rem, 22vw, 9rem);
 			padding-bottom: 2rem;
-			gap: 2rem;
+			gap: 1.25rem;
 		}
 
-		.hero-waveform {
-			height: 80px;
-			gap: 3px;
+		.hero-bg-svg {
+			top: 1rem;
+			height: clamp(90px, 24vw, 130px);
 		}
 
 		.hero-sub {

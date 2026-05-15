@@ -43,7 +43,7 @@
 	}
 
 	.concept-text h4 {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.88rem;
 		font-weight: 500;
 		margin-bottom: 0.35rem;

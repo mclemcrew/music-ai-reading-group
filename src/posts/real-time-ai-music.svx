@@ -13,6 +13,7 @@ badge: "music-ai-reading-group"
 	import LatencyTimeline from '$lib/components/viz/LatencyTimeline.svelte';
 	import AnticipateLookahead from '$lib/components/viz/AnticipateLookahead.svelte';
 	import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
+	import Callout from '$lib/components/ui/Callout.svelte';
 </script>
 
 ## The Two-Second Problem
@@ -21,7 +22,15 @@ The experience of playing piano alongside a partner who responds two seconds lat
 
 The bottleneck is structural. Autoregressive transformer models maintain a *key-value (KV) cache* that stores all prior context for efficient generation. This cache must be computed from scratch each time the model is invoked, an O(N² · d) operation over context length N and model dimension d. For a pianist who has played 30 to 60 seconds of MIDI, this computation requires 1 to 2 seconds before the first output note can be generated, a delay that falls well outside the sub-150ms window within which acoustic feedback is perceived as continuous with the action that caused it.
 
+<Callout type="gotcha" label="The two-second wall">
+	The KV-cache prefill is O(N² · d). On a 30–60 second MIDI prompt, that's a 1–2 second compute spike before the model can emit its first note. Anything slower than ~150 ms and the human nervous system stops perceiving the response as connected to the action. Every paper in this space is fighting the prefill, directly or indirectly.
+</Callout>
+
 This session examines two 2025 papers that each address this problem through distinct strategies.
+
+<Callout type="insight" label="Eliminate vs. mask">
+	Ghost in the Keys <em>eliminates</em> the wall: it keeps the KV cache prefilled continuously as the pianist plays, so when generation is needed there's nothing to compute. ReaLJam <em>masks</em> the wall: it keeps generating speculatively, commits to predictions a bit early, and uses a waterfall display to give the human a heads-up so the latency feels intentional. Same problem, opposite engineering values.
+</Callout>
 
 <div class="concepts">
 	<div class="concept-row">
@@ -35,8 +44,8 @@ This session examines two 2025 papers that each address this problem through dis
 				<!-- Time axis -->
 				<line x1="8" y1="64" x2="92" y2="64" stroke="#dde0e6" stroke-width="0.8"/>
 				<!-- Labels -->
-				<text x="12" y="70" fill="#1a9e8f" font-size="6.5" font-family="DM Mono, monospace" opacity="0.7">flow</text>
-				<text x="53" y="70" fill="#e03131" font-size="6.5" font-family="DM Mono, monospace" opacity="0.7">2s gap</text>
+				<text x="12" y="70" fill="#1a9e8f" font-size="6.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">flow</text>
+				<text x="53" y="70" fill="#e03131" font-size="6.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">2s gap</text>
 			</svg>
 		</div>
 		<div class="concept-text">
@@ -76,20 +85,20 @@ This session examines two 2025 papers that each address this problem through dis
 			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
 				<!-- KV cache block diagram -->
 				<rect x="8" y="20" width="36" height="32" rx="2" stroke="#e07020" stroke-width="1.2"/>
-				<text x="26" y="32" text-anchor="middle" fill="#e07020" font-size="6" font-family="DM Mono, monospace">KV</text>
-				<text x="26" y="44" text-anchor="middle" fill="#e07020" font-size="6" font-family="DM Mono, monospace">cache</text>
+				<text x="26" y="32" text-anchor="middle" fill="#e07020" font-size="6" font-family="Quicksand, system-ui, sans-serif">KV</text>
+				<text x="26" y="44" text-anchor="middle" fill="#e07020" font-size="6" font-family="Quicksand, system-ui, sans-serif">cache</text>
 				<!-- Chunk arrows -->
 				<path d="M44 28 L54 28" stroke="#FF9500" stroke-width="1.2"/>
-				<text x="59" y="22" fill="#FF9500" font-size="6" font-family="DM Mono, monospace">c1</text>
+				<text x="59" y="22" fill="#FF9500" font-size="6" font-family="Quicksand, system-ui, sans-serif">c1</text>
 				<rect x="54" y="18" width="12" height="12" rx="1" stroke="#FF9500" stroke-width="1" opacity="0.8"/>
-				<text x="59" y="38" fill="#FF9500" font-size="6" font-family="DM Mono, monospace">c2</text>
+				<text x="59" y="38" fill="#FF9500" font-size="6" font-family="Quicksand, system-ui, sans-serif">c2</text>
 				<rect x="54" y="30" width="12" height="12" rx="1" stroke="#FF9500" stroke-width="1" opacity="0.6"/>
-				<text x="59" y="54" fill="#FF9500" font-size="6" font-family="DM Mono, monospace">c3</text>
+				<text x="59" y="54" fill="#FF9500" font-size="6" font-family="Quicksand, system-ui, sans-serif">c3</text>
 				<rect x="54" y="42" width="12" height="12" rx="1" stroke="#FF9500" stroke-width="1" opacity="0.4"/>
 				<!-- Time arrow -->
 				<path d="M8 58 L92 58" stroke="#dde0e6" stroke-width="0.8"/>
 				<polygon points="90,55 95,58 90,61" fill="#dde0e6" opacity="0.8"/>
-				<text x="8" y="68" fill="#e07020" font-size="6.5" font-family="DM Mono, monospace" opacity="0.6">prefill while playing</text>
+				<text x="8" y="68" fill="#e07020" font-size="6.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.6">prefill while playing</text>
 			</svg>
 		</div>
 		<div class="concept-text">
@@ -103,19 +112,19 @@ This session examines two 2025 papers that each address this problem through dis
 			<svg viewBox="0 0 100 72" fill="none" xmlns="http://www.w3.org/2000/svg">
 				<!-- Waterfall bars -->
 				<rect x="12" y="8" width="18" height="10" rx="1" stroke="#9B59B6" stroke-width="1" opacity="0.4"/>
-				<text x="21" y="16" text-anchor="middle" fill="#9B59B6" font-size="5.5" font-family="DM Mono, monospace" opacity="0.6">Em7</text>
+				<text x="21" y="16" text-anchor="middle" fill="#9B59B6" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.6">Em7</text>
 				<rect x="12" y="22" width="18" height="10" rx="1" stroke="#3498DB" stroke-width="1" opacity="0.7"/>
-				<text x="21" y="30" text-anchor="middle" fill="#3498DB" font-size="5.5" font-family="DM Mono, monospace">Am</text>
+				<text x="21" y="30" text-anchor="middle" fill="#3498DB" font-size="5.5" font-family="Quicksand, system-ui, sans-serif">Am</text>
 				<rect x="12" y="36" width="18" height="10" rx="1" stroke="#3498DB" stroke-width="1.4"/>
-				<text x="21" y="44" text-anchor="middle" fill="#3498DB" font-size="5.5" font-family="DM Mono, monospace">F</text>
+				<text x="21" y="44" text-anchor="middle" fill="#3498DB" font-size="5.5" font-family="Quicksand, system-ui, sans-serif">F</text>
 				<!-- Now bar -->
 				<rect x="12" y="50" width="76" height="10" rx="1" stroke="#FF9500" stroke-width="1.8" opacity="0.9"/>
-				<text x="50" y="58" text-anchor="middle" fill="#FF9500" font-size="5.5" font-family="DM Mono, monospace">▶ C  (now)</text>
+				<text x="50" y="58" text-anchor="middle" fill="#FF9500" font-size="5.5" font-family="Quicksand, system-ui, sans-serif">▶ C  (now)</text>
 				<!-- Arrow -->
 				<path d="M50 6 L50 50" stroke="#dde0e6" stroke-width="0.7" stroke-dasharray="2 2"/>
 				<polygon points="47,48 50,53 53,48" fill="#dde0e6" opacity="0.7"/>
-				<text x="66" y="8" fill="#9B59B6" font-size="5.5" font-family="DM Mono, monospace" opacity="0.5">uncommitted</text>
-				<text x="66" y="30" fill="#3498DB" font-size="5.5" font-family="DM Mono, monospace" opacity="0.7">committed</text>
+				<text x="66" y="8" fill="#9B59B6" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.5">uncommitted</text>
+				<text x="66" y="30" fill="#3498DB" font-size="5.5" font-family="Quicksand, system-ui, sans-serif" opacity="0.7">committed</text>
 			</svg>
 		</div>
 		<div class="concept-text">
@@ -208,8 +217,8 @@ The user study in ReaLJam produced one particularly counterintuitive finding: mu
 <div class="resources-grid">
 	<ResourceLink href="https://arxiv.org/pdf/2511.01663" category="Paper · arXiv 2025" categoryType="paper" label="Ghost in the Keys: A Disklavier Demo for Human-AI Musical Co-Creativity" host="Bradshaw, Spangher, Biderman, Colton" />
 	<ResourceLink href="https://arxiv.org/pdf/2502.21267" category="Paper · CHI 2025" categoryType="paper" label="ReaLJam: Real-Time Human-AI Music Jamming with RL-Tuned Transformers" host="Scarlatos, Wu, Simon, Roberts, Cooijmans, Jaques, Tarakajian, Huang" />
-	<ResourceLink href="https://arxiv.org/abs/2306.08620" category="Paper · arXiv 2023" categoryType="paper" label="Anticipatory Music Transformer" host="Thickstun et al. — direct predecessor to ReaLJam's anticipation mechanism" />
-	<ResourceLink href="https://arxiv.org/abs/2307.04686" category="Paper · arXiv 2023" categoryType="paper" label="VampNet: Music Generation via Masked Acoustic Token Modeling" host="Garcia et al. — companion session: masked generation vs. turn-taking" />
+	<ResourceLink href="https://arxiv.org/abs/2306.08620" category="Paper · arXiv 2023" categoryType="paper" label="Anticipatory Music Transformer" host="Thickstun et al., direct predecessor to ReaLJam's anticipation mechanism" />
+	<ResourceLink href="https://arxiv.org/abs/2307.04686" category="Paper · arXiv 2023" categoryType="paper" label="VampNet: Music Generation via Masked Acoustic Token Modeling" host="Garcia et al., companion session: masked generation vs. turn-taking" />
 	<ResourceLink href="https://arxiv.org/abs/1809.04281" category="Music Cognition" categoryType="paper" label="Musicking: The Meanings of Performing and Listening (Small, 1998)" host="Theoretical framework for why embodied interaction matters" />
 	<ResourceLink href="https://github.com/mclemcrew/music-ai-reading-group" category="Code · Examples" categoryType="tool" label="Reading Group Repo" host="github.com/mclemcrew" />
 </div>
@@ -224,7 +233,7 @@ The user study in ReaLJam produced one particularly counterintuitive finding: mu
 		width: 100%;
 		border-collapse: collapse;
 		font-size: 0.875rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 	}
 
 	.comparison-table th {

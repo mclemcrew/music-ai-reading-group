@@ -159,7 +159,7 @@
 
 					// "?" text
 					ctx.fillStyle = '#9ca3af';
-					ctx.font = `${Math.max(8, Math.min(ch * 0.55, 12))}px "DM Mono", monospace`;
+					ctx.font = `${Math.max(8, Math.min(ch * 0.55, 12))}px "Quicksand", system-ui, sans-serif`;
 					ctx.textAlign = 'center';
 					ctx.textBaseline = 'middle';
 					ctx.fillText('?', cx + cw / 2, cy + ch / 2);

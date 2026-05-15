@@ -127,8 +127,8 @@
 		ctx.fill();
 
 		// Time ticks
-		ctx.fillStyle = '#6b7280';
-		ctx.font = canvasFont(w, 10);
+		ctx.fillStyle = 'rgba(31,29,27,0.78)';
+		ctx.font = canvasFont(w, 11, '500');
 		ctx.textAlign = 'center';
 		for (let s = 0; s <= TOTAL_TIME; s += 5) {
 			const x = timeToX(s);
@@ -225,10 +225,10 @@
 			ctx.setLineDash([]);
 
 			// Label below everything
-			ctx.fillStyle = '#4b5563';
-			ctx.font = canvasFont(w, 13);
+			ctx.fillStyle = 'rgba(31,29,27,0.85)';
+			ctx.font = canvasFont(w, 13, '600');
 			ctx.textAlign = 'center';
-			ctx.globalAlpha = wS2S * 0.85;
+			ctx.globalAlpha = wS2S;
 			ctx.fillText('long-range dependency', (lastCtrlX + firstEvtX) / 2, labelY + 6);
 			ctx.globalAlpha = 1;
 		}
@@ -270,22 +270,22 @@
 
 		// === Autoregressive: label in place of controls ===
 		if (wAR > 0.3) {
-			ctx.globalAlpha = Math.min(1, (wAR - 0.3) / 0.4) * 0.7;
-			ctx.fillStyle = '#4b5563';
-			ctx.font = canvasFont(w, 13);
+			ctx.globalAlpha = Math.min(1, (wAR - 0.3) / 0.4);
+			ctx.fillStyle = 'rgba(31,29,27,0.85)';
+			ctx.font = canvasFont(w, 13, '600');
 			ctx.textAlign = 'center';
 			ctx.fillText('no controls \u2014 unconditional generation', plotL + plotW / 2, controlBaseY + tokH / 2 + 5);
 			ctx.globalAlpha = 1;
 		}
 
 		// === Legend ===
-		ctx.font = canvasFont(w, 11);
+		ctx.font = canvasFont(w, 12, '600');
 		ctx.textAlign = 'left';
-		ctx.fillStyle = '#e07020';
-		ctx.globalAlpha = Math.max(0.3, controlAlpha);
+		ctx.fillStyle = '#c05d16';
+		ctx.globalAlpha = Math.max(0.65, controlAlpha);
 		ctx.fillText('controls (melody)', plotL, h - 8);
 		ctx.globalAlpha = 1;
-		ctx.fillStyle = '#1a9e8f';
+		ctx.fillStyle = '#147c70';
 		ctx.textAlign = 'right';
 		ctx.fillText('events (accompaniment)', plotR, h - 8);
 	}
@@ -392,7 +392,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.8rem;
 		color: var(--text-muted);
 	}

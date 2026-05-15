@@ -191,7 +191,7 @@
 		position: absolute;
 		top: 8px;
 		left: 10px;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.68rem;
 		z-index: 1;
 		pointer-events: none;

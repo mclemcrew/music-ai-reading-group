@@ -17,7 +17,7 @@
 		border: 1px solid var(--border);
 		border-radius: 20px;
 		padding: 0.3rem 1rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.8rem;
 		letter-spacing: 0.03em;
 	}
