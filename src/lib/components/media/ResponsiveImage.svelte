@@ -35,7 +35,7 @@
 		margin-top: 0.5rem;
 		font-size: 0.8rem;
 		color: var(--text-muted);
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		text-align: center;
 	}
 </style>

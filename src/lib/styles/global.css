@@ -25,7 +25,7 @@ a, button, [role='button'], input, select, textarea {
 }
 
 code,
-.mono {
+pre {
 	font-family: var(--font-mono);
 }
 
@@ -53,18 +53,22 @@ h2,
 h3,
 h4 {
 	font-family: var(--font-display);
+	color: var(--text);
 }
 
-/* Responsive typography */
+/* Responsive typography. Quicksand reads best with a touch less weight than
+   the average sans — 700 for h1, 600 for h2, 500 for h3. */
 h1 {
 	font-size: clamp(1.8rem, 4vw, 2.8rem);
 	font-weight: 700;
-	letter-spacing: -0.02em;
+	letter-spacing: -0.015em;
+	line-height: 1.15;
 }
 
 h2 {
 	font-size: clamp(1.2rem, 3vw, 1.5rem);
 	font-weight: 600;
+	letter-spacing: -0.005em;
 	margin-bottom: 1.2rem;
 }
 
@@ -72,7 +76,7 @@ h3 {
 	font-size: 1.1rem;
 	color: var(--teal);
 	margin: 1.5rem 0 0.75rem;
-	font-weight: 600;
+	font-weight: 500;
 }
 
 /* Code blocks */

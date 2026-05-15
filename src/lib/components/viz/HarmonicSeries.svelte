@@ -168,7 +168,7 @@
 		ctx.stroke();
 
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = '12px "DM Mono", monospace';
+		ctx.font = '12px "Quicksand", system-ui, sans-serif';
 		ctx.fillText('summed waveform \u2014 drag bars to reshape', pad, waveRegionY + 4);
 	}
 
@@ -230,7 +230,7 @@
 <VizPanel title="Harmonic Series" titleColor="var(--orange)">
 	{#snippet controls()}
 		<label class="slider-label">
-			<span class="mono">f0</span>
+			<span>f0</span>
 			<input
 				type="range"
 				min="100"
@@ -239,7 +239,7 @@
 				bind:value={f0}
 				oninput={onSliderInput}
 			/>
-			<span class="mono freq-display">{f0} Hz</span>
+			<span class="freq-display">{f0} Hz</span>
 		</label>
 		<VizButton active={playing} onclick={() => (playing ? stopAudio() : startAudio())}>
 			{playing ? 'Stop' : 'Play'}
@@ -291,7 +291,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.75rem;
 		color: var(--text-muted);
 	}

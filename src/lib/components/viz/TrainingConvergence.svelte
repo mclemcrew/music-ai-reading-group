@@ -179,8 +179,8 @@
 
 <VizPanel title="Training Loop" titleColor="var(--violet)">
 	{#snippet controls()}
-		<span class="mono status">{stepDisplay}</span>
-		<span class="mono status">{lossDisplay}</span>
+		<span class="status">{stepDisplay}</span>
+		<span class="status">{lossDisplay}</span>
 		<VizButton active={training} onclick={toggleTraining}>
 			{training ? 'Pause' : 'Train'}
 		</VizButton>
@@ -199,7 +199,7 @@
 	}
 
 	.status {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.75rem;
 		color: var(--text-muted);
 	}

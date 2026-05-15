@@ -146,7 +146,7 @@
 		const mx = (toCanvasX(models[0].log10p) + toCanvasX(models[2].log10p)) / 2;
 		const my = (toCanvasY(models[0].f) + toCanvasY(models[2].f)) / 2 - 10;
 		ctx.fillStyle = 'rgba(26,158,143,0.45)';
-		ctx.font = '7.5px "DM Mono", monospace';
+		ctx.font = '7.5px "Quicksand", system-ui, sans-serif';
 		ctx.textAlign = 'center';
 		ctx.fillText('efficiency frontier', mx, my);
 

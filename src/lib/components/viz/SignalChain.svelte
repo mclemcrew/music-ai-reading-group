@@ -94,6 +94,6 @@
 	svg {
 		width: 100%;
 		height: auto;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 	}
 </style>

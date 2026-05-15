@@ -42,7 +42,7 @@
 	}
 
 	.category {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.65rem;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
@@ -71,6 +71,6 @@
 	.host {
 		font-size: 0.75rem;
 		color: var(--text-muted);
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 	}
 </style>

@@ -73,7 +73,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.78rem;
 		color: var(--text-muted);
 		text-decoration: none;
@@ -102,7 +102,7 @@
 		align-items: center;
 		gap: 0.35rem;
 		margin-top: 0.75rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.75rem;
 		color: var(--teal);
 		text-decoration: none;
@@ -157,7 +157,7 @@
 		border: 1px solid var(--border);
 		border-radius: 20px;
 		padding: 0.3rem 1rem;
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.8rem;
 		color: var(--teal);
 		letter-spacing: 0.03em;
@@ -165,14 +165,6 @@
 
 	.post-content {
 		line-height: 1.65;
-	}
-
-	/* Constrain prose to comfortable reading measure, but let
-	   visualizations, grids, and run boxes use full container width */
-	.post-content :global(p),
-	.post-content :global(ul),
-	.post-content :global(ol) {
-		max-width: 65ch;
 	}
 
 	.post-content :global(section) {
@@ -227,7 +219,7 @@
 	}
 
 	.post-content :global(.concept-text h4) {
-		font-family: var(--font-mono);
+		font-family: var(--font-display);
 		font-size: 0.88rem;
 		font-weight: 500;
 		margin-bottom: 0.35rem;

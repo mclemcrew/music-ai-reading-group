@@ -26,3 +26,5 @@ Thumbs.db
 experiments/*/output.wav
 experiments/*/recordings/
 experiments/*/checkpoints/
+
+reading-group/*
