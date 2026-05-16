@@ -1,0 +1,1 @@
+import{at as e}from"../chunks/WRtPh0vY.js";import{s as t}from"../chunks/TYrbkCqf.js";import{n}from"../chunks/Dk0CgJFO2.js";var r=e({load:()=>i,prerender:()=>!0}),i=()=>{n(308,`${t}/papers`)};export{r as universal};
