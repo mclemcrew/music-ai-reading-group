@@ -250,6 +250,12 @@ A practical consideration that distinguishes the two: VampNet produces audio dir
 
 ## From Tokens to Latents: Stable Audio 3 and SAME
 
+<Callout type="aside" label="Reading group session · Stable Audio 3">
+	This session went through two papers from Stability AI's 2026 release: <em>Stable Audio 3</em>, the family of latent-diffusion models, and <em>SAME</em>, the autoencoder it generates in. The walkthrough below covers both, with audio demos across the small, medium, and large tiers.
+
+	[Watch the recording](https://uaudio.zoom.us/rec/share/rmVdCWj1kTFTHeDCg-gqVX3MpmW5tCG-747-0asWmppVcKWVTFsI9Sex304KKZD8.uYvpCLaH73K2LmB6) · passcode `bYbe=t4i`
+</Callout>
+
 VampNet's bet was to make the representation *discrete*: compress audio into a grid of codec tokens and let a transformer treat them like words. That choice buys a clean modeling story (it's BERT for audio) but also inherits the codec's ceiling. Nine RVQ codebooks at ~90× compression still leave a long token sequence, the residual quantizer's first codebook carries most of the musical load while the rest patch up spectral detail, and the model can only ever sound as good as the codec can reconstruct.
 
 A second family took the opposite turn. Instead of quantizing into a discrete vocabulary, *latent diffusion* keeps the latent continuous (a real-valued vector sequence produced by an autoencoder) and learns to generate it by iterative denoising. This is the lineage behind Stable Diffusion in images and Stable Audio in sound. The two papers here are the 2026 state of that lineage for music, and they're best read as a pair. One builds the latent space, the other learns to generate in it.
