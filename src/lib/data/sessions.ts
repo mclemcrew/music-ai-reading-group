@@ -370,6 +370,42 @@ export const sessions: Session[] = [
 		]
 	},
 	{
+		week: 'Week 9',
+		date: '2026-05-21',
+		topic: 'Agentic DAW Co-Creation',
+		topicColor: 'violet',
+		recording: null,
+		papers: [
+			{
+				id: 'dawzy-2025',
+				title: 'DAWZY: A New Addition to AI-powered "Human in the Loop" Music Co-creation',
+				authors: 'Elkins, Singh, Kieback, Blankenship, Amadasun, Chadha',
+				year: 2025,
+				link: 'https://arxiv.org/abs/2512.03289',
+				hasPost: true,
+				postSlug: 'agentic-daw-co-creation',
+				excalidraw: null,
+				blurb:
+					'An Electron app wraps REAPER and turns text, speech, or hummed audio into reversible ReaScript edits. GPT-5 emits the Lua; three MCP tools handle state queries, unit-correct FX parameter setting, and local MusicGen-small for beat generation. The MOS test (N=21) puts Control as the lowest of five dimensions at 3.81, echoing the surprisal-control paradox from ReaLJam.',
+				relatedTo: ['cleo-2026', 'realjam-2025']
+			},
+			{
+				id: 'cleo-2026',
+				title:
+					'"When to Hand Off, When to Work Together": Expanding Human-Agent Co-Creative Collaboration through Concurrent Interaction',
+				authors: 'Son, Lee, Choi, Kim, Kim, Lee, Chung, Jung, Kim',
+				year: 2026,
+				link: 'https://arxiv.org/abs/2603.02050',
+				hasPost: true,
+				postSlug: 'agentic-daw-co-creation',
+				excalidraw: null,
+				blurb:
+					"Two Figma probes (N=10 each) characterize five action patterns and six triggers behind 214 turns of professional design work with a process-visible ReAct agent. The headline number is 31.8% of turns involve concurrent action on the same artifact — a category that current agent architectures, DAWZY included, have no architectural slot for. CLEO's three add-on modules (user-change detection, attribution, plan update) are the prototype of what comes next.",
+				relatedTo: ['dawzy-2025', 'aria-duet-2025']
+			}
+		]
+	},
+	{
 		week: 'Week 10',
 		date: '2026-05-28',
 		topic: 'Stable Audio 3',
