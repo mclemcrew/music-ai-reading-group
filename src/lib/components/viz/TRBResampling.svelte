@@ -21,14 +21,19 @@
 	const TEAL = '#1a9e8f'; // extracted downsampled output (y)
 	const GREY = '#9ca3af';
 
-	// 4 phases: 0 inputs, 1 interleave queries, 2 process (transformer), 3 extract
 	let playing = $state(false);
-	let progress = $state(1); // 0..1 over the whole 4-phase animation
+	let progress = $state(1); // 0..1 over the whole animation
 	let playStart = 0;
-	const PLAY_MS = 5600;
+	const PLAY_MS = 5200;
 
-	const N_IN = 8; // input embeddings x0..x7
-	const STRIDE = 2; // S=2 → 2× downsampling
+	const N_IN = 8; // x0..x7
+	const STRIDE = 2; // S=2 -> 2x downsampling
+	const N_SEG = N_IN / STRIDE;
+
+	function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+		ctx.beginPath();
+		ctx.roundRect(x, y, w, h, r);
+	}
 
 	function box(
 		ctx: CanvasRenderingContext2D,
@@ -43,24 +48,50 @@
 	) {
 		if (alpha < 0.02) return;
 		ctx.save();
-		ctx.globalAlpha = alpha * 0.09;
+		ctx.globalAlpha = alpha * 0.1;
 		ctx.fillStyle = color;
-		ctx.beginPath();
-		ctx.roundRect(x, y, s, s, 3);
+		roundRectPath(ctx, x, y, s, s, 4);
 		ctx.fill();
 		ctx.globalAlpha = alpha;
 		ctx.strokeStyle = color;
-		ctx.lineWidth = 1.2;
+		ctx.lineWidth = 1.4;
 		if (dashed) ctx.setLineDash([3, 2]);
-		ctx.beginPath();
-		ctx.roundRect(x, y, s, s, 3);
+		roundRectPath(ctx, x, y, s, s, 4);
 		ctx.stroke();
 		ctx.setLineDash([]);
 		ctx.fillStyle = color;
-		ctx.font = canvasFont(w, 9, '500');
+		ctx.font = canvasFont(w, 11, '600');
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
 		ctx.fillText(label, x + s / 2, y + s / 2 + 1);
+		ctx.restore();
+	}
+
+	function arrow(
+		ctx: CanvasRenderingContext2D,
+		x0: number,
+		y0: number,
+		x1: number,
+		y1: number,
+		color: string,
+		alpha: number
+	) {
+		ctx.save();
+		ctx.globalAlpha = alpha;
+		ctx.strokeStyle = color;
+		ctx.lineWidth = 1.2;
+		ctx.beginPath();
+		ctx.moveTo(x0, y0);
+		ctx.lineTo(x1, y1);
+		ctx.stroke();
+		// head
+		ctx.fillStyle = color;
+		ctx.beginPath();
+		ctx.moveTo(x1 - 3.2, y1 - 6);
+		ctx.lineTo(x1 + 3.2, y1 - 6);
+		ctx.lineTo(x1, y1);
+		ctx.closePath();
+		ctx.fill();
 		ctx.restore();
 	}
 
@@ -73,104 +104,131 @@
 		ctx.lineJoin = 'round';
 
 		const padX = canvasPad(w, 18);
-		const s = Math.min(30, (w - padX * 2) / 13);
 		const p = playing ? progress : 1;
-		// phase fractions
-		const ph1 = Math.min(1, p / 0.25); // interleave queries appear
-		const ph2 = Math.min(1, Math.max(0, (p - 0.3) / 0.25)); // transformer process
-		const ph3 = Math.min(1, Math.max(0, (p - 0.62) / 0.3)); // extract y
+		const ph1 = Math.min(1, p / 0.28); // queries appear
+		const ph2 = Math.min(1, Math.max(0, (p - 0.3) / 0.34)); // attention over segment
+		const ph3 = Math.min(1, Math.max(0, (p - 0.66) / 0.34)); // extract to y
 
-		const topY = canvasPad(w, 26);
-		const procY = h / 2 - s / 2;
-		const outY = h - canvasPad(w, 30) - s;
+		// geometry: one interleaved lane up top, a transformer band, an output lane
+		const slots = N_IN + N_SEG; // each segment adds one query
+		const gap = canvasPad(w, 5);
+		const segGap = canvasPad(w, 16);
+		const avail = w - padX * 2;
+		const s = Math.min(
+			34,
+			(avail - (slots - N_SEG) * gap - (N_SEG - 1) * segGap) / slots
+		);
+		const laneW = slots * s + (slots - N_SEG) * gap + (N_SEG - 1) * segGap;
+		const laneX = (w - laneW) / 2;
 
-		// ---- top lane: interleaved sequence (x x q | x x q | ...) ----
-		const nSeg = N_IN / STRIDE;
-		const totalSlots = N_IN + nSeg; // each segment gains one query
-		const gap = canvasPad(w, 4);
-		const segGap = canvasPad(w, 12);
-		const laneW = totalSlots * s + (totalSlots - nSeg) * gap + (nSeg - 1) * segGap;
-		let x = (w - laneW) / 2;
+		const topY = canvasPad(w, 40);
+		const barY = canvasPad(w, 132);
+		const barH = canvasPad(w, 30);
+		const outY = h - canvasPad(w, 58);
 
+		// section labels
 		ctx.fillStyle = CANVAS_LABEL;
 		ctx.font = canvasFont(w, 10, '600');
 		ctx.textAlign = 'left';
-		ctx.textBaseline = 'bottom';
-		ctx.fillText('audio patch embeddings, grouped into segments of 2 + a learnable query', padX, topY - canvasPad(w, 6));
+		ctx.textBaseline = 'alphabetic';
+		ctx.fillText('1 · interleave a learnable query into each segment of two patches', padX, topY - canvasPad(w, 12));
 
-		const queryX: number[] = [];
-		for (let seg = 0; seg < nSeg; seg++) {
+		// per-segment translucent backgrounds + boxes + attention arcs
+		const qCenters: number[] = [];
+		const xCenters: number[][] = [];
+		let x = laneX;
+		for (let seg = 0; seg < N_SEG; seg++) {
+			const segStart = x;
+			const xs: number[] = [];
 			for (let k = 0; k < STRIDE; k++) {
 				const idx = seg * STRIDE + k;
 				box(ctx, x, topY, s, ORANGE, `x${idx}`, w, 1);
+				xs.push(x + s / 2);
 				x += s + gap;
 			}
-			// learnable query, fades in during phase 1
-			queryX.push(x);
-			box(ctx, x, topY, s, VIOLET, 'q', w, ph1, true);
+			const qx = x;
+			qCenters.push(qx + s / 2);
+			xCenters.push(xs);
+			box(ctx, qx, topY, s, VIOLET, 'q', w, ph1, true);
+			const segEnd = qx + s;
+			// segment background
+			ctx.save();
+			ctx.globalAlpha = 0.05 + 0.04 * ph2;
+			ctx.fillStyle = VIOLET;
+			roundRectPath(ctx, segStart - gap * 0.6, topY - canvasPad(w, 4), segEnd - segStart + gap * 1.2, s + canvasPad(w, 8), 5);
+			ctx.fill();
+			ctx.restore();
 			x += s + segGap;
 		}
 
-		// ---- middle: transformer stack ----
-		const boxW = laneW * 0.62;
-		const boxX = (w - boxW) / 2;
-		const tH = s * 1.1;
-		const tY = procY - tH / 2 + s / 2;
-		const pulse = ph2 > 0 && ph2 < 1 ? 0.5 + 0.5 * Math.sin(ph2 * Math.PI) : ph2 >= 1 ? 1 : 0.25;
+		// 2 · attention: each query reads the two patches in its segment (arcs above)
+		if (ph2 > 0.01) {
+			ctx.fillStyle = VIOLET;
+			ctx.font = canvasFont(w, 10, '600');
+			ctx.textAlign = 'left';
+			ctx.fillText('2 · each query attends over its segment', padX, topY + s + canvasPad(w, 22));
+			qCenters.forEach((qx, seg) => {
+				xCenters[seg].forEach((xc) => {
+					const midX = (qx + xc) / 2;
+					const lift = topY - canvasPad(w, 12);
+					ctx.save();
+					ctx.globalAlpha = 0.25 + 0.5 * ph2 * (0.6 + 0.4 * Math.sin(p * Math.PI * 2 + seg));
+					ctx.strokeStyle = VIOLET;
+					ctx.lineWidth = 1;
+					ctx.beginPath();
+					ctx.moveTo(xc, topY);
+					ctx.quadraticCurveTo(midX, lift, qx, topY);
+					ctx.stroke();
+					ctx.restore();
+				});
+			});
+		}
+
+		// transformer band
 		ctx.save();
-		ctx.globalAlpha = 0.3 + 0.7 * Math.min(1, ph1);
+		ctx.globalAlpha = 0.35 + 0.65 * Math.min(1, ph1);
+		const pulse = ph2 > 0 && ph2 < 1 ? 0.5 + 0.5 * Math.sin(ph2 * Math.PI) : ph2 >= 1 ? 0.9 : 0.2;
+		ctx.fillStyle = `rgba(124,77,255,${0.05 + 0.05 * pulse})`;
+		roundRectPath(ctx, laneX, barY, laneW, barH, 6);
+		ctx.fill();
 		ctx.strokeStyle = GREY;
 		ctx.lineWidth = 1.2;
 		ctx.setLineDash([4, 3]);
-		ctx.beginPath();
-		ctx.roundRect(boxX, tY, boxW, tH, 5);
+		roundRectPath(ctx, laneX, barY, laneW, barH, 6);
 		ctx.stroke();
 		ctx.setLineDash([]);
-		ctx.fillStyle = `rgba(124,77,255,${0.06 * pulse})`;
-		ctx.fill();
 		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = canvasFont(w, 10, '600');
+		ctx.font = canvasFont(w, 11, '600');
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
-		ctx.fillText('D transformer layers  (queries attend over their segment)', w / 2, tY + tH / 2);
+		ctx.fillText('D transformer layers', w / 2, barY + barH / 2);
 		ctx.restore();
 
-		// connectors from top lane into the transformer
+		// feed every slot into the band
 		ctx.save();
-		ctx.globalAlpha = 0.25 * Math.min(1, ph1);
+		ctx.globalAlpha = 0.18 * Math.min(1, ph1);
 		ctx.strokeStyle = GREY;
 		ctx.lineWidth = 0.8;
-		ctx.beginPath();
-		ctx.moveTo(w / 2, topY + s);
-		ctx.lineTo(w / 2, tY);
-		ctx.stroke();
+		[...xCenters.flat(), ...qCenters].forEach((cx) => {
+			ctx.beginPath();
+			ctx.moveTo(cx, topY + s);
+			ctx.lineTo(cx, barY);
+			ctx.stroke();
+		});
 		ctx.restore();
 
-		// ---- bottom: extracted y embeddings (the downsampled output) ----
-		const outW = nSeg * s + (nSeg - 1) * segGap;
-		let ox = (w - outW) / 2;
+		// 3 · keep the query outputs as the downsampled sequence
 		ctx.fillStyle = CANVAS_LABEL;
 		ctx.font = canvasFont(w, 10, '600');
 		ctx.textAlign = 'left';
-		ctx.textBaseline = 'top';
-		ctx.fillText('keep the query outputs, discard the rest → 2× downsampled', padX, outY + s + canvasPad(w, 6));
+		ctx.textBaseline = 'alphabetic';
+		ctx.fillText('3 · keep only the query outputs  ·  2× shorter', padX, outY + s + canvasPad(w, 20));
 
-		for (let seg = 0; seg < nSeg; seg++) {
+		qCenters.forEach((qx, seg) => {
+			const ox = qx - s / 2;
+			if (ph3 > 0.02) arrow(ctx, qx, barY + barH, qx, outY, TEAL, 0.35 * ph3);
 			box(ctx, ox, outY, s, TEAL, `y${seg}`, w, ph3);
-			// rising arrow from transformer to y
-			if (ph3 > 0.02) {
-				ctx.save();
-				ctx.globalAlpha = 0.3 * ph3;
-				ctx.strokeStyle = TEAL;
-				ctx.lineWidth = 0.9;
-				ctx.beginPath();
-				ctx.moveTo(ox + s / 2, tY + tH);
-				ctx.lineTo(ox + s / 2, outY);
-				ctx.stroke();
-				ctx.restore();
-			}
-			ox += s + segGap;
-		}
+		});
 	}
 
 	function tick(ts: number) {
@@ -182,6 +240,9 @@
 			progress = Math.min(1, (ts - playStart) / PLAY_MS);
 			draw();
 			if (progress >= 1) playing = false;
+		} else {
+			// keep the attention arcs gently shimmering when fully shown
+			draw();
 		}
 		raf = requestAnimationFrame(tick);
 	}
@@ -237,11 +298,11 @@
 		{/snippet}
 		<canvas bind:this={canvas} style="width:100%;height:300px"></canvas>
 		{#snippet caption()}
-			SAME downsamples with attention instead of strided convolution. The sequence is split into
-			segments; a learnable <em>query</em> embedding is appended to each, the whole interleaved
-			sequence is run through transformer layers, and only the query outputs are kept. Stride 2
-			here halves the length; SAME stacks this to a 16× TRB stage, which on top of 256× patching
-			gives the full 4096× compression. (After SAME Figures 1–2.)
+			SAME downsamples with attention instead of strided convolution. It splits the sequence into
+			segments, drops a learnable query into each, runs the whole interleaved sequence through the
+			transformer so every query reads its own segment, then keeps only the query outputs. Stride 2
+			halves the length here. SAME stacks this into a 16× stage, which on top of 256× patching gives
+			the full 4096× compression.
 		{/snippet}
 	</VizPanel>
 </div>

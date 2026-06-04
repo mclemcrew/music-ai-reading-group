@@ -4,7 +4,7 @@ subtitle: "From masked acoustic tokens and symbolic infilling to latent diffusio
 date: "2026-04-02"
 authors: ["Music AI Reading Group"]
 tags: ["generation", "transformers", "vampnet", "masked-modeling", "midi", "diffusion", "latent-diffusion", "stable-audio", "autoencoder"]
-description: "Approaches to music generation across the representation spectrum: VampNet's masked acoustic tokens, the Anticipatory Music Transformer's symbolic infilling, and Stable Audio 3's latent diffusion over the SAME semantically-aligned autoencoder — with side-by-side audio demos across the small, medium, and large model tiers."
+description: "Approaches to music generation across the representation spectrum: VampNet's masked acoustic tokens, the Anticipatory Music Transformer's symbolic infilling, and Stable Audio 3's latent diffusion over the SAME semantically-aligned autoencoder, with side-by-side audio demos across the small, medium, and large model tiers."
 published: true
 badge: "music-ai-reading-group"
 excalidraw: "https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C"
@@ -252,17 +252,17 @@ A practical consideration that distinguishes the two: VampNet produces audio dir
 
 VampNet's bet was to make the representation *discrete*: compress audio into a grid of codec tokens and let a transformer treat them like words. That choice buys a clean modeling story (it's BERT for audio) but also inherits the codec's ceiling. Nine RVQ codebooks at ~90× compression still leave a long token sequence, the residual quantizer's first codebook carries most of the musical load while the rest patch up spectral detail, and the model can only ever sound as good as the codec can reconstruct.
 
-A second family took the opposite turn. Instead of quantizing into a discrete vocabulary, **latent diffusion** keeps the latent *continuous* — a real-valued vector sequence produced by an autoencoder — and learns to generate it by iterative denoising. This is the lineage behind Stable Diffusion in images and Stable Audio in sound. The two papers below are the 2026 state of that lineage for music, and they're best read as a pair: one builds the latent space, the other learns to generate in it.
+A second family took the opposite turn. Instead of quantizing into a discrete vocabulary, *latent diffusion* keeps the latent continuous (a real-valued vector sequence produced by an autoencoder) and learns to generate it by iterative denoising. This is the lineage behind Stable Diffusion in images and Stable Audio in sound. The two papers here are the 2026 state of that lineage for music, and they're best read as a pair. One builds the latent space, the other learns to generate in it.
 
 <Callout type="definition" label="Latent diffusion (vs. masked token modeling)">
-	Train an autoencoder to map audio to a compact continuous latent and back. Then train a separate model to start from pure Gaussian noise and progressively denoise it into a valid latent, conditioned on a text prompt. Decode the latent to audio. Where VampNet predicts <em>discrete</em> tokens by unmasking, diffusion predicts a <em>continuous</em> denoising direction — there is no codebook, and quality is bounded by the autoencoder's reconstruction rather than a quantizer's bitrate.
+	Train an autoencoder to map audio to a compact continuous latent and back. Then train a separate model to start from pure Gaussian noise and progressively denoise it into a valid latent, conditioned on a text prompt. Decode the latent to audio. Where VampNet predicts <em>discrete</em> tokens by unmasking, diffusion predicts a <em>continuous</em> denoising direction. There is no codebook, and quality is bounded by the autoencoder's reconstruction rather than a quantizer's bitrate.
 </Callout>
 
-[**SAME** (Parker et al., 2026)](https://arxiv.org/abs/2605.18613) is the autoencoder — the latent space. [**Stable Audio 3** (Evans et al., 2026)](https://arxiv.org/abs/2605.17991) is the diffusion transformer that generates inside it. The headline number ties them together: SAME compresses 44.1 kHz stereo by **4096×** into a 256-dimensional sequence at roughly 10.76 Hz, and *because* that latent is so compact and so well-structured, the diffusion model on top can generate minutes of music in a handful of steps — fast enough to run on a MacBook.
+[**SAME** (Parker et al., 2026)](https://arxiv.org/abs/2605.18613) is the autoencoder, the latent space itself. [**Stable Audio 3** (Evans et al., 2026)](https://arxiv.org/abs/2605.17991) is the diffusion transformer that generates inside it. One number ties them together: SAME compresses 44.1 kHz stereo by **4096×** into a 256-dimensional sequence at roughly 10.76 Hz. Because that latent is so compact and so well organized, the diffusion model on top can generate minutes of music in a handful of steps, which is what makes it fast enough to run on a MacBook.
 
 ## SAME: A Semantically-Aligned Latent Space
 
-Most latent-diffusion autoencoders are tuned for one thing: reconstruct the input as faithfully as possible. SAME (Semantically-Aligned Music autoEncoder) adds a second, less obvious goal — make the latent *easy to generate*. Two latents can reconstruct equally well yet be wildly different to model: one a tangled manifold, the other smooth and semantically organized. SAME is engineered for the second kind, and that single decision is what lets the diffusion model converge fast and stay small.
+Most latent-diffusion autoencoders are tuned for one thing, which is reconstructing the input as faithfully as possible. SAME (Semantically-Aligned Music autoEncoder) adds a second goal that gets less attention: making the latent *easy to generate*. Two latents can reconstruct equally well and still be very different to model, one a tangled manifold and the other smooth and semantically organized. SAME goes after the second kind, and that one decision is what lets the diffusion model converge fast and stay small.
 
 ### How it compresses: patching, then attention
 
@@ -270,27 +270,27 @@ SAME reaches 4096× downsampling in two stages, neither of which is a convolutio
 
 <TRBResampling />
 
-First, a **patching pretransform**: stereo waveforms are sliced into non-overlapping 256-sample patches per channel and reshaped into vectors. This is a parameter-free 256× downsampling — gradients flow straight through it, so the encoder and decoder still train end-to-end against the raw waveform. Then a **Transformer Resampling Block (TRB)** does a further 16×. Rather than pooling or striding, the TRB interleaves a learnable *query* embedding into each short segment of the sequence, runs the whole thing through transformer layers so each query attends over its neighborhood, and keeps only the query outputs. Downsampling becomes a learned read-out instead of a fixed filter. Stack the two stages and you get the full 4096×.
+First comes a **patching pretransform**, where stereo waveforms are sliced into non-overlapping 256-sample patches per channel and reshaped into vectors. That is a parameter-free 256× downsampling, and gradients flow straight through it, so the encoder and decoder still train end-to-end against the raw waveform. Then a **Transformer Resampling Block (TRB)** does a further 16×. Rather than pooling or striding, the TRB interleaves a learnable *query* embedding into each short segment of the sequence, runs the whole thing through transformer layers so each query attends over its neighborhood, and keeps only the query outputs. Downsampling becomes a learned read-out instead of a fixed filter. Stack the two stages and you get the full 4096×.
 
-<Callout type="insight" label="Why such aggressive compression?">
-	A higher downsampling ratio means a shorter latent sequence for the same audio, which makes the downstream diffusion transformer cheaper and lets it see long-range musical structure within a fixed context. The risk is that crushing 4096 samples into one vector destroys reconstructable detail. SAME's answer is to spend its modeling budget on transformer primitives and phase-aware losses rather than raw spatial resolution — and to use a larger latent dimension (256) than the 32–64 typical of image VAEs, which keeps enough capacity per token.
+<Callout type="insight" label="What the heavy compression buys">
+	A higher downsampling ratio means a shorter latent sequence for the same audio, which makes the downstream diffusion transformer cheaper and lets it see long-range musical structure within a fixed context. The risk is that crushing 4096 samples into one vector destroys detail you can never reconstruct. SAME's answer is to spend its modeling budget on transformer primitives and phase-aware losses rather than raw spatial resolution, and to use a larger latent dimension (256) than the 32 to 64 typical of image VAEs, which keeps enough capacity per token.
 </Callout>
 
 ### The bottleneck: soft-normalization, not a VAE
 
-Between encoder and decoder, a standard latent-diffusion model puts a variational (KL) bottleneck. SAME uses something lighter: a learnable per-channel affine transform followed by division by a **running standard deviation** tracked with an exponential moving average. A mild KL-like penalty nudges the latent toward zero-mean, unit-variance statistics along both the time and channel axes, but the encoding stays essentially deterministic. At training time a small amount of Gaussian noise is added to the latent (more than at inference) so the decoder learns to tolerate the imperfect latents the diffusion model will eventually hand it — the same robustness trick that matters when modeling large semantic latents in images.
+Between encoder and decoder, a standard latent-diffusion model puts a variational (KL) bottleneck. SAME uses something lighter: a learnable per-channel affine transform followed by division by a **running standard deviation** tracked with an exponential moving average. A mild KL-like penalty nudges the latent toward zero-mean, unit-variance statistics along both the time and channel axes, but the encoding stays essentially deterministic. At training time a little Gaussian noise is added to the latent (more than at inference) so the decoder learns to tolerate the imperfect latents the diffusion model will eventually hand it. The same trick has proven to matter when modeling large semantic latents in images.
 
 ### The loss zoo: where "semantic alignment" comes from
 
-The interesting part is what SAME optimizes. Reconstruction fidelity comes from a **multi-resolution STFT loss** computed at seven FFT sizes, but with two careful upgrades over the usual recipe. The convergence term is replaced by a bounded, symmetric *spectral contrast* loss; the log-magnitude term uses an adaptive normalization so the "knee" between linear and logarithmic scaling tracks the signal level instead of sitting at an arbitrary constant. Crucially, SAME also keeps **phase** information through normalized instantaneous-frequency and group-delay terms — phase coherence is what makes transients crisp and stereo imaging believable, and magnitude-only losses throw it away. A relativistic GAN adds the final layer of perceptual realism.
+The interesting part is what SAME optimizes. Reconstruction fidelity comes from a **multi-resolution STFT loss** computed at seven FFT sizes, but with two careful upgrades over the usual recipe. The convergence term is replaced by a bounded, symmetric *spectral contrast* loss, and the log-magnitude term uses an adaptive normalization so the "knee" between linear and logarithmic scaling tracks the signal level instead of sitting at an arbitrary constant. SAME also keeps **phase** information, through normalized instantaneous-frequency and group-delay terms. Phase coherence is what makes transients crisp and stereo imaging believable, and magnitude-only losses throw it away. A relativistic GAN adds the last bit of perceptual realism.
 
 Then come the losses that make the latent *generatable*:
 
-- **Semantic regression.** Tiny 1×1-convolution regressors predict perceptual features — octave-band chroma and the interaural level difference (the per-band left/right energy gap that encodes stereo image) — *directly from the latent*. This forces pitch-class and spatial information to live in an accessible, linearly-decodable form.
+- **Semantic regression.** Tiny 1×1-convolution regressors predict perceptual features directly from the latent: octave-band chroma, and the interaural level difference (the per-band left/right energy gap that encodes stereo image). This forces pitch-class and spatial information to live in an accessible, linearly-decodable form.
 - **Contrastive latent alignment.** A small transformer critic decides whether a latent sequence, an audio-feature view, and a T5Gemma text embedding all came from the same clip. This pulls the latent toward cross-modal, text-aligned semantics.
-- **Diffusion (generative) alignment.** A little 4-layer diffusion transformer is trained *jointly* on the latent with a flow-matching objective, and its gradients flow back into the encoder — literally shaping the latent geometry to be easy for diffusion to model. This is the direct analogue of the discrete-tokenizer trick of co-training an autoregressive head, adapted to continuous latents.
+- **Diffusion (generative) alignment.** A little 4-layer diffusion transformer is trained *jointly* on the latent with a flow-matching objective, and its gradients flow back into the encoder, shaping the latent geometry so diffusion finds it easy to model. This is the continuous-latent version of an old discrete-tokenizer trick, co-training an autoregressive head to shape the codebook.
 
-SAME ships in two sizes — **SAME-L** (852M) for quality and **SAME-S** (108M, distilled) for CPU/edge inference — and both are frozen during diffusion training.
+SAME ships in two sizes: **SAME-L** (852M) for quality and **SAME-S** (108M, distilled) for CPU and edge inference. Both are frozen during diffusion training.
 
 ## Stable Audio 3: Generating in the Latent
 
@@ -300,19 +300,19 @@ With the latent fixed, Stable Audio 3 is a **diffusion transformer (DiT)** that 
 
 <ConditioningPathways />
 
-A useful way to read a conditional DiT is to ask *how each signal gets in*. SA3 uses three distinct mechanisms, because the signals have different shapes. The diffusion **timestep** and the requested **duration** are single vectors that should modulate the whole network, so they enter through adaptive layer norm (AdaLN) — predicting a gate, scale, and shift for every sub-layer. The **text** prompt is a variable-length sequence from a frozen T5Gemma encoder, so it enters through **cross-attention**. And the **inpainting** signal — a masked copy of the reference audio plus a binary mask — is spatially aligned with the latent, so it's projected and simply *added* to the hidden state at every block. SA3 also prepends 64 learnable **memory embeddings** that every position can attend to, giving the model a global scratchpad, and `medium`/`large` use differential attention to sharpen what the heads focus on.
+A good way to read a conditional DiT is to ask how each signal gets in, because the signals have different shapes. The diffusion **timestep** and the requested **duration** are single vectors that should modulate the whole network, so they enter through adaptive layer norm (AdaLN), which predicts a gate, scale, and shift for every sub-layer. The **text** prompt is a variable-length sequence from a frozen T5Gemma encoder, so it enters through **cross-attention**. The **inpainting** signal, a masked copy of the reference audio plus a binary mask, lines up position-for-position with the latent, so it is projected and simply *added* to the hidden state at every block. SA3 also prepends 64 learnable **memory embeddings** that every position can attend to, which gives the model a global scratchpad, and `medium` and `large` use differential attention to sharpen what the heads focus on.
 
 ### Variable length: stop denoising silence
 
 <VariableLength />
 
-This is the contribution that sounds mundane and matters enormously in practice. A diffusion model denoises a fixed-size tensor. If your model can produce up to two minutes, then generating a four-second sound effect normally means denoising two minutes of mostly zero-padded silence — you pay the full compute regardless. Autoregressive models never had this problem (they just stop emitting tokens), but it has dogged diffusion. SA3 allocates a latent sequence whose length is *proportional* to the requested duration, so short clips cost short compute. It's the difference between a model that's efficient in a benchmark and one that's pleasant to actually use.
+This is the contribution that sounds mundane and matters a lot in practice. A diffusion model denoises a fixed-size tensor. If your model can produce up to two minutes, then generating a four-second sound effect normally means denoising two minutes of mostly zero-padded silence, so you pay the full compute either way. Autoregressive models never had this problem, since they just stop emitting tokens, but it has dogged diffusion. SA3 allocates a latent sequence whose length is *proportional* to the requested duration, so short clips cost short compute. Since most prompts people actually type ask for short clips, that is where a lot of the practical speed comes from.
 
 ### Few-step generation: the speed
 
 <FewStepDistill />
 
-The last piece is why this is fast. Diffusion's iterative denoising usually needs dozens to hundreds of network evaluations. SA3's training pipeline is three stages — flow-matching pre-training (with minibatch optimal-transport coupling to straighten the probability paths), ODE warmup distillation, and **adversarial post-training (ARC)** — and the payoff is that the final model reaches comparable quality in **8 steps**. That's how a 2.7B model renders six minutes of audio in under two seconds on an H200, and why the small and medium tiers generate in seconds on a laptop.
+The last piece is why this is fast. Diffusion's iterative denoising usually needs dozens to hundreds of network evaluations. SA3's training runs in three stages: flow-matching pre-training (with minibatch optimal-transport coupling to straighten the probability paths), then ODE warmup distillation, then **adversarial post-training (ARC)**. The payoff is that the final model reaches comparable quality in **8 steps**. That is how a 2.7B model renders six minutes of audio in under two seconds on an H200, and why the small and medium tiers generate in seconds on a laptop.
 
 ### The model family
 
@@ -370,7 +370,7 @@ Every clip below uses the **same prompt and the same seed** across tiers, so the
 	<AudioPlayer src="/audio/stable-audio/sa3_large_chiptune.mp3" label="large · 2.7B (API)" isTarget={true} />
 </div>
 
-<p class="muted">A few things tend to come through on careful listening. The <code>small-music</code> model is remarkably capable for 459M parameters and generates in well under a second on a laptop, but it can smear fast transients and thin out the stereo field. <code>medium</code> firms up the low end and the rhythmic grid. <code>large</code> usually has the cleanest high frequencies and the most convincing room sound. The gaps are smaller than the 6× parameter spread might suggest — a testament to how much work the SAME latent is doing before diffusion even starts.</p>
+<p class="muted">A few things tend to come through on careful listening. The <code>small-music</code> model is surprisingly capable for 459M parameters and generates in well under a second on a laptop, though it can smear fast transients and thin out the stereo field. <code>medium</code> firms up the low end and the rhythmic grid. <code>large</code> usually has the cleanest high frequencies and the most convincing room sound. The gaps are smaller than the 6× parameter spread might suggest, which tells you how much of the work the SAME latent is doing before diffusion even starts.</p>
 
 #### Sound effects (medium + large only)
 
@@ -385,14 +385,14 @@ Every clip below uses the **same prompt and the same seed** across tiers, so the
 
 The same model that generates from scratch also edits, because conditioning is just another input. These run through the API (`large`).
 
-**Variable length.** Identical prompt and seed, two durations. The 60-second version isn't the 8-second one looped — the model composes for the length it's given. (It's also why the file is roughly 7× larger.)
+**Variable length.** Identical prompt and seed, two durations. The 60-second version isn't the 8-second one looped. The model composes for the length it's given, which is also why the file is roughly 7× larger.
 
 <div class="sa3-ladder sa3-ladder-2">
 	<AudioPlayer src="/audio/stable-audio/sa3_large_vlen-8s.mp3" label="8 seconds" />
 	<AudioPlayer src="/audio/stable-audio/sa3_large_vlen-60s.mp3" label="60 seconds" isTarget={true} />
 </div>
 
-**Continuation (inpainting).** Take the jazz-piano clip from the ladder, then ask the model to regenerate the region *past its end* — seeded by the original so it stays coherent — with a new instruction to "build into a walking-bass swing groove." Inpainting a causal mask at the tail is exactly continuation.
+**Continuation (inpainting).** Take the jazz-piano clip from the ladder, then ask the model to regenerate the region *past its end*, seeded by the original so it stays coherent, with a new instruction to "build into a walking-bass swing groove." Inpainting a causal mask at the tail is exactly continuation.
 
 <div class="sa3-ladder sa3-ladder-2">
 	<AudioPlayer src="/audio/stable-audio/sa3_large_jazz-piano.mp3" label="seed (first 12s)" />
@@ -408,12 +408,12 @@ The same model that generates from scratch also edits, because conditioning is j
 
 ## How It All Fits
 
-Lay the three approaches in this post side by side and the design space comes into focus. VampNet quantizes audio into discrete codec tokens and unmasks them bidirectionally. The Anticipatory Music Transformer leaves the audio domain entirely for symbolic events and interleaves controls into a causal stream. Stable Audio 3 keeps a *continuous* latent and denoises it with diffusion. Three representations — discrete-audio, symbolic, continuous-latent — and three modeling paradigms — masked, autoregressive, diffusion.
+Lay the three approaches in this post side by side and the design space comes into focus. VampNet quantizes audio into discrete codec tokens and unmasks them bidirectionally. The Anticipatory Music Transformer leaves the audio domain entirely for symbolic events and interleaves controls into a causal stream. Stable Audio 3 keeps a *continuous* latent and denoises it with diffusion. Three representations (discrete audio, symbolic, continuous latent) and three modeling paradigms (masked, autoregressive, diffusion).
 
-But the thread from the first half of this post holds. Every one of these systems treats **controllable generation** as a first-class goal, and every one of them leans on a *learned compression* of audio to make modeling tractable: VampNet on DAC's residual quantizer, SA3 on the SAME autoencoder. The shift from VampNet to SAME is the shift from *discrete and acoustic* to *continuous and semantic* — a latent designed not just to reconstruct the waveform but to be aligned with text and easy to generate. That alignment is why a 459M model can do, on a laptop, what would have been a server-class job a couple of years ago.
+The thread from the first half of this post still holds, though. All three treat **controllable generation** as a first-class goal, and all three lean on a *learned compression* of audio to make modeling tractable: VampNet on DAC's residual quantizer, SA3 on the SAME autoencoder. Going from VampNet to SAME is a move from discrete and acoustic to continuous and semantic. SAME's latent has to reconstruct the waveform, line up with text, and stay easy to generate, all at once, and that combination is why a 459M model can do on a laptop what would have been a server-class job a couple of years ago.
 
 <Callout type="insight" label="The takeaway">
-	The autoencoder is not a preprocessing detail — it's half the model. SAME spends real effort making its latent semantically structured and generatable, and Stable Audio 3 cashes that in as speed, small model sizes, and variable-length, editable generation. When you're evaluating a modern generative-audio system, ask what its latent space was optimized for, not just how big the generator is.
+	The autoencoder is not a preprocessing detail. It is half the model. SAME spends real effort making its latent semantically structured and easy to generate, and Stable Audio 3 cashes that in as speed, small model sizes, and editable, variable-length generation. When you size up a modern generative-audio system, ask what its latent space was optimized for, not only how big the generator is.
 </Callout>
 
 ## Run Stable Audio 3 Yourself
@@ -426,7 +426,7 @@ The reading-group repo includes an `experiments/stable-audio` project that repro
 cd music-ai-reading-group/experiments/stable-audio
 ./setup.sh                                  # uv env + the numpy/pywavelets + lightning fixes
 
-# Local open-weight tiers (gated weights — needs an HF token with SA3 access):
+# Local open-weight tiers (gated weights; needs an HF token with SA3 access):
 export HF_TOKEN=hf_...
 uv run --no-sync generate.py --model small  --duration 12
 uv run --no-sync generate.py --model medium --duration 12

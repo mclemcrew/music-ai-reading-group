@@ -20,14 +20,29 @@
 	let ws: any = null;
 	let isPlaying = $state(false);
 	let ready = $state(false);
+	let currentTime = $state(0);
+	let duration = $state(0);
+
+	const accent = isTarget ? '#1a9e8f' : '#e07020';
+
+	function fmt(s: number): string {
+		if (!s || !isFinite(s)) return '0:00';
+		const m = Math.floor(s / 60);
+		const sec = Math.floor(s % 60);
+		return `${m}:${sec.toString().padStart(2, '0')}`;
+	}
 
 	onMount(async () => {
 		const WaveSurfer = (await import('wavesurfer.js')).default;
 		ws = WaveSurfer.create({
 			container: waveDiv,
-			waveColor: isTarget ? 'rgba(26,158,143,0.5)' : 'rgba(224,112,32,0.4)',
-			progressColor: isTarget ? '#1a9e8f' : '#e07020',
-			cursorColor: 'transparent',
+			// Played portion is the solid accent; the part still to play stays a faint
+			// version of the same colour, so the contrast shows how far along you are.
+			waveColor: isTarget ? 'rgba(26,158,143,0.22)' : 'rgba(224,112,32,0.2)',
+			progressColor: accent,
+			// Visible playhead so you can see the exact position.
+			cursorColor: 'rgba(31,29,27,0.55)',
+			cursorWidth: 2,
 			barWidth: 2,
 			barGap: 1,
 			barRadius: 1,
@@ -39,6 +54,15 @@
 
 		ws.on('ready', () => {
 			ready = true;
+			duration = ws.getDuration();
+		});
+
+		ws.on('audioprocess', (t: number) => {
+			currentTime = t;
+		});
+		// fires on seek/scrub too, so the readout stays correct when you click the wave
+		ws.on('interaction', () => {
+			currentTime = ws.getCurrentTime();
 		});
 
 		ws.on('play', () => {
@@ -52,6 +76,7 @@
 
 		ws.on('finish', () => {
 			isPlaying = false;
+			currentTime = duration;
 			onFinish?.();
 		});
 
@@ -70,13 +95,16 @@
 <div class="ws-item" class:playing={isPlaying} class:target={isTarget}>
 	<div class="ws-label">
 		<span class:target-label={isTarget}>{label}</span>
-		<button class="ws-play-btn" onclick={toggle} aria-label={isPlaying ? 'Pause' : 'Play'}>
-			{#if isPlaying}
-				&#9646;&#9646;
-			{:else}
-				&#9654;
-			{/if}
-		</button>
+		<div class="ws-right">
+			<span class="ws-time">{fmt(currentTime)} / {fmt(duration)}</span>
+			<button class="ws-play-btn" onclick={toggle} aria-label={isPlaying ? 'Pause' : 'Play'}>
+				{#if isPlaying}
+					&#9646;&#9646;
+				{:else}
+					&#9654;
+				{/if}
+			</button>
+		</div>
 	</div>
 	<div class="ws-wave" bind:this={waveDiv}></div>
 </div>
@@ -127,6 +155,21 @@
 	.target-label {
 		color: var(--teal) !important;
 		font-weight: 500;
+	}
+
+	.ws-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
+	}
+
+	.ws-time {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: 0.7rem;
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+		opacity: 0.8;
 	}
 
 	.ws-play-btn {
