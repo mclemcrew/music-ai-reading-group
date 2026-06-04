@@ -1,10 +1,10 @@
 ---
 title: "Music Generation"
-subtitle: "From masked acoustic tokens to anticipatory symbolic infilling"
+subtitle: "From masked acoustic tokens and symbolic infilling to latent diffusion with Stable Audio 3"
 date: "2026-04-02"
 authors: ["Music AI Reading Group"]
-tags: ["generation", "transformers", "vampnet", "masked-modeling", "midi"]
-description: "An overview of two approaches to music generation: VampNet's masked acoustic token modeling for audio-domain generation, and the Anticipatory Music Transformer's interleaved infilling for symbolic MIDI."
+tags: ["generation", "transformers", "vampnet", "masked-modeling", "midi", "diffusion", "latent-diffusion", "stable-audio", "autoencoder"]
+description: "Approaches to music generation across the representation spectrum: VampNet's masked acoustic tokens, the Anticipatory Music Transformer's symbolic infilling, and Stable Audio 3's latent diffusion over the SAME semantically-aligned autoencoder — with side-by-side audio demos across the small, medium, and large model tiers."
 published: true
 badge: "music-ai-reading-group"
 excalidraw: "https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C"
@@ -14,6 +14,10 @@ excalidraw: "https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C"
 	import CodebookRVQ from '$lib/components/viz/CodebookRVQ.svelte';
 	import MaskAndPredict from '$lib/components/viz/MaskAndPredict.svelte';
 	import AnticipationInterleave from '$lib/components/viz/AnticipationInterleave.svelte';
+	import VariableLength from '$lib/components/viz/VariableLength.svelte';
+	import TRBResampling from '$lib/components/viz/TRBResampling.svelte';
+	import FewStepDistill from '$lib/components/viz/FewStepDistill.svelte';
+	import ConditioningPathways from '$lib/components/viz/ConditioningPathways.svelte';
 	import AudioPlayer from '$lib/components/audio/AudioPlayer.svelte';
 	import ResourceLink from '$lib/components/ui/ResourceLink.svelte';
 	import Callout from '$lib/components/ui/Callout.svelte';
@@ -244,7 +248,199 @@ These two papers, published within a month of each other in 2023, represent two 
 
 A practical consideration that distinguishes the two: VampNet produces audio directly (via DAC decoding), so the output quality is bounded by the codec's fidelity. AMT produces MIDI, which has perfect symbolic fidelity but requires a separate synthesizer to render audio, so the *sonic* quality depends entirely on the synthesis engine. We noted during the session that AMT's MIDI output rendered through a basic synthesizer has a characteristic 90s-video-game quality, while VampNet's audio output inherits the genre and production quality of its training data. Both approaches have merits, and they are in some sense complementary: symbolic models offer precise structural control, while audio models capture the nuances of timbre and production that symbolic representations discard.
 
-## Run It Yourself
+## From Tokens to Latents: Stable Audio 3 and SAME
+
+VampNet's bet was to make the representation *discrete*: compress audio into a grid of codec tokens and let a transformer treat them like words. That choice buys a clean modeling story (it's BERT for audio) but also inherits the codec's ceiling. Nine RVQ codebooks at ~90× compression still leave a long token sequence, the residual quantizer's first codebook carries most of the musical load while the rest patch up spectral detail, and the model can only ever sound as good as the codec can reconstruct.
+
+A second family took the opposite turn. Instead of quantizing into a discrete vocabulary, **latent diffusion** keeps the latent *continuous* — a real-valued vector sequence produced by an autoencoder — and learns to generate it by iterative denoising. This is the lineage behind Stable Diffusion in images and Stable Audio in sound. The two papers below are the 2026 state of that lineage for music, and they're best read as a pair: one builds the latent space, the other learns to generate in it.
+
+<Callout type="definition" label="Latent diffusion (vs. masked token modeling)">
+	Train an autoencoder to map audio to a compact continuous latent and back. Then train a separate model to start from pure Gaussian noise and progressively denoise it into a valid latent, conditioned on a text prompt. Decode the latent to audio. Where VampNet predicts <em>discrete</em> tokens by unmasking, diffusion predicts a <em>continuous</em> denoising direction — there is no codebook, and quality is bounded by the autoencoder's reconstruction rather than a quantizer's bitrate.
+</Callout>
+
+[**SAME** (Parker et al., 2026)](https://arxiv.org/abs/2605.18613) is the autoencoder — the latent space. [**Stable Audio 3** (Evans et al., 2026)](https://arxiv.org/abs/2605.17991) is the diffusion transformer that generates inside it. The headline number ties them together: SAME compresses 44.1 kHz stereo by **4096×** into a 256-dimensional sequence at roughly 10.76 Hz, and *because* that latent is so compact and so well-structured, the diffusion model on top can generate minutes of music in a handful of steps — fast enough to run on a MacBook.
+
+## SAME: A Semantically-Aligned Latent Space
+
+Most latent-diffusion autoencoders are tuned for one thing: reconstruct the input as faithfully as possible. SAME (Semantically-Aligned Music autoEncoder) adds a second, less obvious goal — make the latent *easy to generate*. Two latents can reconstruct equally well yet be wildly different to model: one a tangled manifold, the other smooth and semantically organized. SAME is engineered for the second kind, and that single decision is what lets the diffusion model converge fast and stay small.
+
+### How it compresses: patching, then attention
+
+SAME reaches 4096× downsampling in two stages, neither of which is a convolution.
+
+<TRBResampling />
+
+First, a **patching pretransform**: stereo waveforms are sliced into non-overlapping 256-sample patches per channel and reshaped into vectors. This is a parameter-free 256× downsampling — gradients flow straight through it, so the encoder and decoder still train end-to-end against the raw waveform. Then a **Transformer Resampling Block (TRB)** does a further 16×. Rather than pooling or striding, the TRB interleaves a learnable *query* embedding into each short segment of the sequence, runs the whole thing through transformer layers so each query attends over its neighborhood, and keeps only the query outputs. Downsampling becomes a learned read-out instead of a fixed filter. Stack the two stages and you get the full 4096×.
+
+<Callout type="insight" label="Why such aggressive compression?">
+	A higher downsampling ratio means a shorter latent sequence for the same audio, which makes the downstream diffusion transformer cheaper and lets it see long-range musical structure within a fixed context. The risk is that crushing 4096 samples into one vector destroys reconstructable detail. SAME's answer is to spend its modeling budget on transformer primitives and phase-aware losses rather than raw spatial resolution — and to use a larger latent dimension (256) than the 32–64 typical of image VAEs, which keeps enough capacity per token.
+</Callout>
+
+### The bottleneck: soft-normalization, not a VAE
+
+Between encoder and decoder, a standard latent-diffusion model puts a variational (KL) bottleneck. SAME uses something lighter: a learnable per-channel affine transform followed by division by a **running standard deviation** tracked with an exponential moving average. A mild KL-like penalty nudges the latent toward zero-mean, unit-variance statistics along both the time and channel axes, but the encoding stays essentially deterministic. At training time a small amount of Gaussian noise is added to the latent (more than at inference) so the decoder learns to tolerate the imperfect latents the diffusion model will eventually hand it — the same robustness trick that matters when modeling large semantic latents in images.
+
+### The loss zoo: where "semantic alignment" comes from
+
+The interesting part is what SAME optimizes. Reconstruction fidelity comes from a **multi-resolution STFT loss** computed at seven FFT sizes, but with two careful upgrades over the usual recipe. The convergence term is replaced by a bounded, symmetric *spectral contrast* loss; the log-magnitude term uses an adaptive normalization so the "knee" between linear and logarithmic scaling tracks the signal level instead of sitting at an arbitrary constant. Crucially, SAME also keeps **phase** information through normalized instantaneous-frequency and group-delay terms — phase coherence is what makes transients crisp and stereo imaging believable, and magnitude-only losses throw it away. A relativistic GAN adds the final layer of perceptual realism.
+
+Then come the losses that make the latent *generatable*:
+
+- **Semantic regression.** Tiny 1×1-convolution regressors predict perceptual features — octave-band chroma and the interaural level difference (the per-band left/right energy gap that encodes stereo image) — *directly from the latent*. This forces pitch-class and spatial information to live in an accessible, linearly-decodable form.
+- **Contrastive latent alignment.** A small transformer critic decides whether a latent sequence, an audio-feature view, and a T5Gemma text embedding all came from the same clip. This pulls the latent toward cross-modal, text-aligned semantics.
+- **Diffusion (generative) alignment.** A little 4-layer diffusion transformer is trained *jointly* on the latent with a flow-matching objective, and its gradients flow back into the encoder — literally shaping the latent geometry to be easy for diffusion to model. This is the direct analogue of the discrete-tokenizer trick of co-training an autoregressive head, adapted to continuous latents.
+
+SAME ships in two sizes — **SAME-L** (852M) for quality and **SAME-S** (108M, distilled) for CPU/edge inference — and both are frozen during diffusion training.
+
+## Stable Audio 3: Generating in the Latent
+
+With the latent fixed, Stable Audio 3 is a **diffusion transformer (DiT)** that learns to denoise SAME latents from noise, conditioned on a text prompt, a target duration, and (optionally) a region to inpaint.
+
+### Three doors for conditioning
+
+<ConditioningPathways />
+
+A useful way to read a conditional DiT is to ask *how each signal gets in*. SA3 uses three distinct mechanisms, because the signals have different shapes. The diffusion **timestep** and the requested **duration** are single vectors that should modulate the whole network, so they enter through adaptive layer norm (AdaLN) — predicting a gate, scale, and shift for every sub-layer. The **text** prompt is a variable-length sequence from a frozen T5Gemma encoder, so it enters through **cross-attention**. And the **inpainting** signal — a masked copy of the reference audio plus a binary mask — is spatially aligned with the latent, so it's projected and simply *added* to the hidden state at every block. SA3 also prepends 64 learnable **memory embeddings** that every position can attend to, giving the model a global scratchpad, and `medium`/`large` use differential attention to sharpen what the heads focus on.
+
+### Variable length: stop denoising silence
+
+<VariableLength />
+
+This is the contribution that sounds mundane and matters enormously in practice. A diffusion model denoises a fixed-size tensor. If your model can produce up to two minutes, then generating a four-second sound effect normally means denoising two minutes of mostly zero-padded silence — you pay the full compute regardless. Autoregressive models never had this problem (they just stop emitting tokens), but it has dogged diffusion. SA3 allocates a latent sequence whose length is *proportional* to the requested duration, so short clips cost short compute. It's the difference between a model that's efficient in a benchmark and one that's pleasant to actually use.
+
+### Few-step generation: the speed
+
+<FewStepDistill />
+
+The last piece is why this is fast. Diffusion's iterative denoising usually needs dozens to hundreds of network evaluations. SA3's training pipeline is three stages — flow-matching pre-training (with minibatch optimal-transport coupling to straighten the probability paths), ODE warmup distillation, and **adversarial post-training (ARC)** — and the payoff is that the final model reaches comparable quality in **8 steps**. That's how a 2.7B model renders six minutes of audio in under two seconds on an H200, and why the small and medium tiers generate in seconds on a laptop.
+
+### The model family
+
+Three models share the design and differ in capacity, autoencoder, and how you get them:
+
+| Model        | DiT params | Autoencoder | Max length | Open weights | Music | SFX |
+| ------------ | ---------- | ----------- | ---------- | ------------ | ----- | --- |
+| `small-music`| 459M       | SAME-S      | 2m         | ✅           | ✅    | —   |
+| `medium`     | 1.4B       | SAME-L      | 6m 20s     | ✅           | ✅    | ✅  |
+| `large`      | 2.7B       | SAME-L      | 6m 20s     | ❌ (API only)| ✅    | ✅  |
+
+`small-music` and `medium` are released for consumer hardware; `large` is available only through the hosted API. That split is exactly what makes the next section fun.
+
+## The Scaling Ladder: Small → Medium → Large
+
+Every clip below uses the **same prompt and the same seed** across tiers, so the differences are the model, not the dice. The `small` and `medium` tiers were generated locally on an Apple-Silicon laptop (8 steps, pingpong sampler) from the open weights; `large` came from the Stability API. Listen for the things scale tends to buy: cleaner transients, more convincing stereo image, steadier rhythm, and fewer artifacts in the high end.
+
+#### "a jazz piano solo, intimate late-night club, brushed drums and upright bass"
+
+<div class="sa3-ladder">
+	<AudioPlayer src="/audio/stable-audio/sa3_small_jazz-piano.mp3" label="small · 459M" />
+	<AudioPlayer src="/audio/stable-audio/sa3_medium_jazz-piano.mp3" label="medium · 1.4B" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_jazz-piano.mp3" label="large · 2.7B (API)" isTarget={true} />
+</div>
+
+#### "lo-fi hip hop beat, warm vinyl crackle, mellow Rhodes chords, relaxed 85 BPM"
+
+<div class="sa3-ladder">
+	<AudioPlayer src="/audio/stable-audio/sa3_small_lofi.mp3" label="small · 459M" />
+	<AudioPlayer src="/audio/stable-audio/sa3_medium_lofi.mp3" label="medium · 1.4B" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_lofi.mp3" label="large · 2.7B (API)" isTarget={true} />
+</div>
+
+#### "aggressive industrial techno, pounding distorted kick, dark warehouse, 130 BPM"
+
+<div class="sa3-ladder">
+	<AudioPlayer src="/audio/stable-audio/sa3_small_techno.mp3" label="small · 459M" />
+	<AudioPlayer src="/audio/stable-audio/sa3_medium_techno.mp3" label="medium · 1.4B" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_techno.mp3" label="large · 2.7B (API)" isTarget={true} />
+</div>
+
+#### "solo cello playing a melancholic baroque melody, rich resonant tone, reverberant hall"
+
+<div class="sa3-ladder">
+	<AudioPlayer src="/audio/stable-audio/sa3_small_cello.mp3" label="small · 459M" />
+	<AudioPlayer src="/audio/stable-audio/sa3_medium_cello.mp3" label="medium · 1.4B" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_cello.mp3" label="large · 2.7B (API)" isTarget={true} />
+</div>
+
+#### "upbeat 8-bit chiptune boss-battle theme, fast arpeggios, driving square-wave bass"
+
+<div class="sa3-ladder">
+	<AudioPlayer src="/audio/stable-audio/sa3_small_chiptune.mp3" label="small · 459M" />
+	<AudioPlayer src="/audio/stable-audio/sa3_medium_chiptune.mp3" label="medium · 1.4B" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_chiptune.mp3" label="large · 2.7B (API)" isTarget={true} />
+</div>
+
+<p class="muted">A few things tend to come through on careful listening. The <code>small-music</code> model is remarkably capable for 459M parameters and generates in well under a second on a laptop, but it can smear fast transients and thin out the stereo field. <code>medium</code> firms up the low end and the rhythmic grid. <code>large</code> usually has the cleanest high frequencies and the most convincing room sound. The gaps are smaller than the 6× parameter spread might suggest — a testament to how much work the SAME latent is doing before diffusion even starts.</p>
+
+#### Sound effects (medium + large only)
+
+`small-music` is trained on instrumental music alone, so it sits this one out. The prompt is *"a thunderstorm with heavy rain on a tin roof, distant rolling thunder."*
+
+<div class="sa3-ladder sa3-ladder-2">
+	<AudioPlayer src="/audio/stable-audio/sa3_medium_thunderstorm.mp3" label="medium · 1.4B" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_thunderstorm.mp3" label="large · 2.7B (API)" isTarget={true} />
+</div>
+
+## Editing: Variable Length, Continuation, and Audio-to-Audio
+
+The same model that generates from scratch also edits, because conditioning is just another input. These run through the API (`large`).
+
+**Variable length.** Identical prompt and seed, two durations. The 60-second version isn't the 8-second one looped — the model composes for the length it's given. (It's also why the file is roughly 7× larger.)
+
+<div class="sa3-ladder sa3-ladder-2">
+	<AudioPlayer src="/audio/stable-audio/sa3_large_vlen-8s.mp3" label="8 seconds" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_vlen-60s.mp3" label="60 seconds" isTarget={true} />
+</div>
+
+**Continuation (inpainting).** Take the jazz-piano clip from the ladder, then ask the model to regenerate the region *past its end* — seeded by the original so it stays coherent — with a new instruction to "build into a walking-bass swing groove." Inpainting a causal mask at the tail is exactly continuation.
+
+<div class="sa3-ladder sa3-ladder-2">
+	<AudioPlayer src="/audio/stable-audio/sa3_large_jazz-piano.mp3" label="seed (first 12s)" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_continuation.mp3" label="extended to 24s" isTarget={true} />
+</div>
+
+**Audio-to-audio.** Feed the cello clip as a structural reference (`strength=0.75`) and re-prompt it as "a warm analog synth pad, dreamy and slow." The melodic contour survives; the timbre is reimagined.
+
+<div class="sa3-ladder sa3-ladder-2">
+	<AudioPlayer src="/audio/stable-audio/sa3_large_cello.mp3" label="cello reference" />
+	<AudioPlayer src="/audio/stable-audio/sa3_large_a2a.mp3" label="→ synth pad" isTarget={true} />
+</div>
+
+## How It All Fits
+
+Lay the three approaches in this post side by side and the design space comes into focus. VampNet quantizes audio into discrete codec tokens and unmasks them bidirectionally. The Anticipatory Music Transformer leaves the audio domain entirely for symbolic events and interleaves controls into a causal stream. Stable Audio 3 keeps a *continuous* latent and denoises it with diffusion. Three representations — discrete-audio, symbolic, continuous-latent — and three modeling paradigms — masked, autoregressive, diffusion.
+
+But the thread from the first half of this post holds. Every one of these systems treats **controllable generation** as a first-class goal, and every one of them leans on a *learned compression* of audio to make modeling tractable: VampNet on DAC's residual quantizer, SA3 on the SAME autoencoder. The shift from VampNet to SAME is the shift from *discrete and acoustic* to *continuous and semantic* — a latent designed not just to reconstruct the waveform but to be aligned with text and easy to generate. That alignment is why a 459M model can do, on a laptop, what would have been a server-class job a couple of years ago.
+
+<Callout type="insight" label="The takeaway">
+	The autoencoder is not a preprocessing detail — it's half the model. SAME spends real effort making its latent semantically structured and generatable, and Stable Audio 3 cashes that in as speed, small model sizes, and variable-length, editable generation. When you're evaluating a modern generative-audio system, ask what its latent space was optimized for, not just how big the generator is.
+</Callout>
+
+## Run Stable Audio 3 Yourself
+
+The reading-group repo includes an `experiments/stable-audio` project that reproduces every clip above. `generate.py` runs the open-weight `small-music` and `medium` tiers locally (Apple Silicon or CUDA) via `stable-audio-tools`; `api_demos.py` drives the `large` tier and the editing demos through the Stability API. The same prompt list and per-prompt seeds are shared across both so the tiers line up for A/B listening.
+
+<div class="run-box">
+
+```bash
+cd music-ai-reading-group/experiments/stable-audio
+./setup.sh                                  # uv env + the numpy/pywavelets + lightning fixes
+
+# Local open-weight tiers (gated weights — needs an HF token with SA3 access):
+export HF_TOKEN=hf_...
+uv run --no-sync generate.py --model small  --duration 12
+uv run --no-sync generate.py --model medium --duration 12
+
+# Large tier + editing demos via the API (needs STABILITY_API_KEY):
+export STABILITY_API_KEY=...
+uv run --no-sync api_demos.py --what all
+```
+
+</div>
+
+<p class="muted">Two gotchas the setup script handles for you: <code>stable-audio-tools</code> can resolve a numpy/pywavelets pair with mismatched binary interfaces (which crashes at import), and it imports <code>pytorch_lightning</code> at model-build time without always declaring it. Always invoke with <code>uv run --no-sync</code> so a re-sync doesn't undo those pins. First load downloads the T5Gemma text encoder and the weights; after that, generation is seconds.</p>
+
+## Run VampNet Yourself
 
 Two scripts are provided. `dac_experiments.py` reconstructs audio at each of the 9 codebook levels so you can hear the RVQ hierarchy. `vampnet_experiments.py` runs VampNet with four masking strategies (vamping, dense vamping, inpainting, beat-driven). Both require Python 3.9–3.11 and about 2 GB of disk space for model weights.
 
@@ -276,6 +472,8 @@ uv run vampnet_experiments.py --input path/to/audio.wav --style faithful
 <div class="resources-grid">
 	<ResourceLink href="https://arxiv.org/abs/2307.04686" category="Paper · ISMIR 2023" categoryType="paper" label="VampNet: Music Generation via Masked Acoustic Token Modeling" host="Garcia, Seetharaman, Kumar, Pardo" />
 	<ResourceLink href="https://arxiv.org/abs/2306.08620" category="Paper · TMLR 2024" categoryType="paper" label="Anticipatory Music Transformer" host="Thickstun, Hall, Donahue, Liang" />
+	<ResourceLink href="https://arxiv.org/abs/2605.17991" category="Paper · 2026" categoryType="paper" label="Stable Audio 3 (Technical Report)" host="Evans, Parker, Rice, Carr, Zukowski, Taylor, Pons" />
+	<ResourceLink href="https://arxiv.org/abs/2605.18613" category="Paper · 2026" categoryType="paper" label="SAME: A Semantically-Aligned Music autoEncoder" host="Parker, Evans, Carr, Zukowski, Taylor, Rice, Pons" />
 	<ResourceLink href="https://arxiv.org/abs/2306.06546" category="Paper · 2023" categoryType="paper" label="High-Fidelity Audio Compression with Improved RVQGAN" host="Kumar, Seetharaman, Luebs et al." />
 	<ResourceLink href="https://link.excalidraw.com/l/8sDmlvduhSt/6vP3sw0sD6C" category="Slides" categoryType="paper" label="VampNet Session Slides" host="Excalidraw" />
 	<ResourceLink href="https://link.excalidraw.com/l/8sDmlvduhSt/1IR71UHPGmr" category="Slides" categoryType="paper" label="AMT Session Slides" host="Excalidraw" />
@@ -292,6 +490,9 @@ uv run vampnet_experiments.py --input path/to/audio.wav --style faithful
 	<ResourceLink href="https://www.hooktheory.com/hookpad" category="Tool" categoryType="tool" label="Hookpad (Music Theory Sketchpad)" host="hooktheory.com" />
 	<ResourceLink href="https://github.com/hugofloresgarcia/vampnet" category="Code" categoryType="tool" label="VampNet Official Repository" host="github.com/hugofloresgarcia" />
 	<ResourceLink href="https://huggingface.co/descript/descript-audio-codec" category="Model" categoryType="tool" label="Descript Audio Codec (DAC)" host="huggingface.co/descript" />
+	<ResourceLink href="https://huggingface.co/stabilityai/stable-audio-3-small-music" category="Model" categoryType="tool" label="Stable Audio 3 small-music (459M, open)" host="huggingface.co/stabilityai" />
+	<ResourceLink href="https://huggingface.co/stabilityai/stable-audio-3-medium" category="Model" categoryType="tool" label="Stable Audio 3 medium (1.4B, open)" host="huggingface.co/stabilityai" />
+	<ResourceLink href="https://github.com/Stability-AI/stable-audio-tools" category="Code" categoryType="tool" label="stable-audio-tools (inference + training)" host="github.com/Stability-AI" />
 	<ResourceLink href="https://colinraffel.com/projects/lmd/" category="Dataset" categoryType="dataset" label="Lakh MIDI Dataset (176K MIDI files)" host="Colin Raffel" />
 	<ResourceLink href="https://huggingface.co/papers/2306.08620" category="Paper" categoryType="paper" label="AMT on HuggingFace Papers" host="huggingface.co" />
 	<ResourceLink href="https://github.com/mclemcrew/music-ai-reading-group" category="Code · Examples" categoryType="tool" label="Reading Group Repo (all examples)" host="github.com/mclemcrew" />
@@ -314,6 +515,24 @@ uv run vampnet_experiments.py --input path/to/audio.wav --style faithful
 		grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
 		gap: 0.75rem;
 		margin: 1rem 0 1.5rem;
+	}
+
+	.sa3-ladder {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.75rem;
+		margin: 0.5rem 0 1.5rem;
+	}
+
+	.sa3-ladder-2 {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	@media (max-width: 640px) {
+		.sa3-ladder,
+		.sa3-ladder-2 {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	@media (max-width: 640px) {

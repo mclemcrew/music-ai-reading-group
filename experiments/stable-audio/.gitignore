@@ -1,0 +1,6 @@
+.venv/
+outputs/
+__pycache__/
+uv.lock
+*.wav
+*.mp3
