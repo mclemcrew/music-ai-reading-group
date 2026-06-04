@@ -1,0 +1,15 @@
+[project]
+name = "stable-audio-experiments"
+version = "0.1.0"
+description = "Stable Audio 3 (small + medium open weights) + Stability API demos for the music-AI reading group"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+    "stable-audio-tools",
+    "torch",
+    "torchaudio",
+    "einops",
+    "requests",
+]
+
+[tool.uv]
+# stable-audio-tools pulls a large dep tree; let uv resolve it.
