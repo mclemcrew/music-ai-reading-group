@@ -45,7 +45,7 @@
 		const blkW = Math.min(canvasPad(w, 200), w * 0.34);
 		const blkX = (w - blkW) / 2;
 		const subs = ['self-attention', 'cross-attention', 'feed-forward (SwiGLU)'];
-		const top = canvasPad(w, 30);
+		const top = canvasPad(w, 44);
 		const bottom = h - canvasPad(w, 30);
 		const blkTop = top + canvasPad(w, 6);
 		const blkH = bottom - blkTop;
@@ -62,11 +62,8 @@
 		ctx.setLineDash([]);
 		ctx.restore();
 
-		ctx.fillStyle = CANVAS_LABEL;
-		ctx.font = canvasFont(w, 10, '600');
-		ctx.textAlign = 'center';
-		ctx.textBaseline = 'bottom';
-		ctx.fillText('one DiT transformer block  (×D)', w / 2, blkTop - canvasPad(w, 6));
+		// block identity is conveyed by the panel title + sub-block names + caption;
+		// the top-centre space is reserved for the AdaLN source label so they don't collide.
 
 		// sub-blocks
 		subs.forEach((name, i) => {
@@ -182,10 +179,10 @@
 		// top (AdaLN)
 		ctx.fillStyle = VIOLET;
 		ctx.textAlign = 'center';
-		ctx.fillText('timestep t + duration', adalnSrcX, top - canvasPad(w, 12));
+		ctx.fillText('timestep t + duration', adalnSrcX, top - canvasPad(w, 28));
 		ctx.fillStyle = CANVAS_LABEL;
 		ctx.font = canvasFont(w, 8);
-		ctx.fillText('AdaLN modulation', adalnSrcX, top - canvasPad(w, 2));
+		ctx.fillText('AdaLN modulation', adalnSrcX, top - canvasPad(w, 16));
 		// left (cross-attn)
 		ctx.fillStyle = ORANGE;
 		ctx.font = canvasFont(w, 9, '600');
