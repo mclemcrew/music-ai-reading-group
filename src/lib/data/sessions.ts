@@ -166,32 +166,6 @@ export const sessions: Session[] = [
 				blurb:
 					"The symbolic-domain counterpart to VampNet: MIDI as a temporal point process, with control tokens interleaved a fixed interval *before* the events they condition. That anticipation trick keeps the sequence local and gives autoregressive sampling valid stopping times, so you get controllable infilling without ever fine-tuning for the task.",
 				relatedTo: ['vampnet-2023']
-			},
-			{
-				id: 'stable-audio-3-2026',
-				title: 'Stable Audio 3 (Technical Report)',
-				authors: 'Evans, Parker, Rice, Carr, Zukowski, Taylor, Pons',
-				year: 2026,
-				link: 'https://arxiv.org/abs/2605.17991',
-				hasPost: true,
-				postSlug: 'music-generation',
-				excalidraw: null,
-				blurb:
-					"The continuous-latent answer to VampNet's discrete tokens: a family of latent-diffusion transformers (small/medium/large) generating on top of the SAME autoencoder. Native variable-length generation, inpainting-based editing, and adversarial post-training get six minutes of audio out in eight steps — fast enough to run small and medium on a laptop.",
-				relatedTo: ['vampnet-2023', 'same-2026']
-			},
-			{
-				id: 'same-2026',
-				title: 'SAME: A Semantically-Aligned Music autoEncoder',
-				authors: 'Parker, Evans, Carr, Zukowski, Taylor, Rice, Pons',
-				year: 2026,
-				link: 'https://arxiv.org/abs/2605.18613',
-				hasPost: true,
-				postSlug: 'music-generation',
-				excalidraw: null,
-				blurb:
-					"The latent space underneath Stable Audio 3: a transformer autoencoder that hits 4096× compression with query-based resampling, a soft-normalisation bottleneck instead of a VAE, and a stack of losses (phase-aware reconstruction, chroma/ILD regression, contrastive text alignment, joint diffusion alignment) that make the latent not just reconstructable but easy to generate.",
-				relatedTo: ['stable-audio-3-2026', 'vampnet-2023']
 			}
 		]
 	},
@@ -392,6 +366,44 @@ export const sessions: Session[] = [
 				blurb:
 					"What CLAP gets via captions, MERT gets from the audio alone. A HuBERT-style transformer masks ~50% of frames and reconstructs from two simultaneous teachers: EnCodec RVQ codes (timbre, texture) and the Constant-Q Transform (pitch, harmony). The dual-teacher design is the load-bearing move — either signal alone leaves the resulting representation blind to half of what music actually is.",
 				relatedTo: ['ms-clap-2022', 'laion-clap-2023']
+			}
+		]
+	},
+	{
+		week: 'Week 10',
+		date: '2026-05-28',
+		topic: 'Stable Audio 3',
+		topicColor: 'plum',
+		recording: {
+			url: 'https://uaudio.zoom.us/rec/share/rmVdCWj1kTFTHeDCg-gqVX3MpmW5tCG-747-0asWmppVcKWVTFsI9Sex304KKZD8.uYvpCLaH73K2LmB6',
+			passcode: 'bYbe=t4i'
+		},
+		papers: [
+			{
+				id: 'stable-audio-3-2026',
+				title: 'Stable Audio 3 (Technical Report)',
+				authors: 'Evans, Parker, Rice, Carr, Zukowski, Taylor, Pons',
+				year: 2026,
+				link: 'https://arxiv.org/abs/2605.17991',
+				hasPost: true,
+				postSlug: 'music-generation',
+				excalidraw: null,
+				blurb:
+					"The continuous-latent answer to VampNet's discrete tokens: a family of latent-diffusion transformers (small, medium, large) generating on top of the SAME autoencoder. Native variable-length generation, inpainting-based editing, and adversarial post-training get six minutes of audio out in eight steps, fast enough to run small and medium on a laptop.",
+				relatedTo: ['vampnet-2023', 'same-2026']
+			},
+			{
+				id: 'same-2026',
+				title: 'SAME: A Semantically-Aligned Music autoEncoder',
+				authors: 'Parker, Evans, Carr, Zukowski, Taylor, Rice, Pons',
+				year: 2026,
+				link: 'https://arxiv.org/abs/2605.18613',
+				hasPost: true,
+				postSlug: 'music-generation',
+				excalidraw: null,
+				blurb:
+					"The latent space underneath Stable Audio 3: a transformer autoencoder that hits 4096× compression with query-based resampling, a soft-normalisation bottleneck instead of a VAE, and a stack of losses (phase-aware reconstruction, chroma/ILD regression, contrastive text alignment, joint diffusion alignment) that make the latent easy to generate, not only faithful to reconstruct.",
+				relatedTo: ['stable-audio-3-2026', 'vampnet-2023']
 			}
 		]
 	}
